@@ -1,0 +1,6 @@
+{
+  "name": "KontenKU - Video Ad & AI Content Studio",
+  "description": "Platform pembuatan iklan video AI otomatis dengan analisis tautan produk, AI script & storyboard, digital avatar & TTS, studio penyuntingan cerdas (Seedance & Prompt Chaining), serta dasbor distribusi dan analitik multi-platform.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
