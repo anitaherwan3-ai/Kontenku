@@ -4,7 +4,9 @@ import {
   PromptChainStep,
   AIStrategyRecommendation,
   PlatformInsight,
-  AnalyticsMetric
+  AnalyticsMetric,
+  SmartCaptionSuggestion,
+  SmartHashtagGroup
 } from '../types';
 
 export const analyzeProductApi = async (params: {
@@ -108,6 +110,27 @@ export const generateSocialCopyApi = async (params: {
   });
   if (!res.ok) {
     throw new Error('Gagal membuat copy media sosial');
+  }
+  const json = await res.json();
+  return json.data;
+};
+
+export const generateSmartCaptionsApi = async (params: {
+  productAnalysis: ProductAnalysis | null;
+  storyboard: StoryboardScene[];
+  platform: string;
+  customFocus?: string;
+}): Promise<{
+  suggestions: SmartCaptionSuggestion[];
+  hashtagGroups: SmartHashtagGroup[];
+}> => {
+  const res = await fetch('/api/generate-smart-captions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    throw new Error('Gagal menghasilkan smart captions & hashtags AI');
   }
   const json = await res.json();
   return json.data;

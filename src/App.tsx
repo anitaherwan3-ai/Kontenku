@@ -8,6 +8,8 @@ import { DistributionTab } from './components/Distribution/DistributionTab';
 import { ExportModal } from './components/Modals/ExportModal';
 import { PippitProject, InputLayerData, StoryboardScene, DigitalAvatar, TTSSettings, UploadedAsset } from './types';
 import { INITIAL_DEFAULT_PROJECT, DEMO_PRESET_PRODUCTS, SAMPLE_AVATARS } from './data/samplePresets';
+import { RenderQueueProvider } from './context/RenderQueueContext';
+import { BackgroundRenderDock } from './components/Common/BackgroundRenderDock';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'input' | 'media' | 'aicore' | 'quickedit' | 'distribution'>('input');
@@ -203,86 +205,91 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col selection:bg-indigo-500 selection:text-white font-sans antialiased">
-      {/* Top Studio Navbar */}
-      <Navbar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        project={project}
-        onLoadPreset={handleLoadPreset}
-        onOpenExportModal={() => setIsExportModalOpen(true)}
-      />
+    <RenderQueueProvider>
+      <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col selection:bg-indigo-500 selection:text-white font-sans antialiased">
+        {/* Top Studio Navbar */}
+        <Navbar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          project={project}
+          onLoadPreset={handleLoadPreset}
+          onOpenExportModal={() => setIsExportModalOpen(true)}
+        />
 
-      {/* Main Content View Switcher */}
-      <main className="flex-1">
-        {activeTab === 'input' && (
-          <InputLayerTab
-            inputData={project.inputData}
-            onChangeInputData={handleUpdateInputData}
-            onProceedToAiCore={() => setActiveTab('aicore')}
-            onProceedToMediaAssets={() => setActiveTab('media')}
-          />
-        )}
+        {/* Main Content View Switcher */}
+        <main className="flex-1">
+          {activeTab === 'input' && (
+            <InputLayerTab
+              inputData={project.inputData}
+              onChangeInputData={handleUpdateInputData}
+              onProceedToAiCore={() => setActiveTab('aicore')}
+              onProceedToMediaAssets={() => setActiveTab('media')}
+            />
+          )}
 
-        {activeTab === 'media' && (
-          <MediaAssetsTab
-            project={project}
-            onChangeUploadedAssets={handleUpdateUploadedAssets}
-            onChangeStoryboard={handleUpdateStoryboard}
-            onProceedToAiCore={() => setActiveTab('aicore')}
-          />
-        )}
+          {activeTab === 'media' && (
+            <MediaAssetsTab
+              project={project}
+              onChangeUploadedAssets={handleUpdateUploadedAssets}
+              onChangeStoryboard={handleUpdateStoryboard}
+              onProceedToAiCore={() => setActiveTab('aicore')}
+            />
+          )}
 
-        {activeTab === 'aicore' && (
-          <AiCoreTab
-            project={project}
-            onChangeStoryboard={handleUpdateStoryboard}
-            onChangeAvatar={handleUpdateAvatar}
-            onChangeTtsSettings={handleUpdateTtsSettings}
-            onProceedToQuickEdit={() => setActiveTab('quickedit')}
-          />
-        )}
+          {activeTab === 'aicore' && (
+            <AiCoreTab
+              project={project}
+              onChangeStoryboard={handleUpdateStoryboard}
+              onChangeAvatar={handleUpdateAvatar}
+              onChangeTtsSettings={handleUpdateTtsSettings}
+              onProceedToQuickEdit={() => setActiveTab('quickedit')}
+            />
+          )}
 
-        {activeTab === 'quickedit' && (
-          <QuickEditTab
-            project={project}
-            onChangeProject={handleUpdateProject}
-            onProceedToDistribution={() => setActiveTab('distribution')}
-          />
-        )}
+          {activeTab === 'quickedit' && (
+            <QuickEditTab
+              project={project}
+              onChangeProject={handleUpdateProject}
+              onProceedToDistribution={() => setActiveTab('distribution')}
+            />
+          )}
 
-        {activeTab === 'distribution' && (
-          <DistributionTab
-            project={project}
-            onChangeProject={handleUpdateProject}
-            onOpenExportModal={() => setIsExportModalOpen(true)}
-          />
-        )}
-      </main>
+          {activeTab === 'distribution' && (
+            <DistributionTab
+              project={project}
+              onChangeProject={handleUpdateProject}
+              onOpenExportModal={() => setIsExportModalOpen(true)}
+            />
+          )}
+        </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-500 mt-12">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div className="flex items-center gap-2 font-medium">
-            <span className="text-slate-900 font-bold">KontenKU</span>
-            <span>• E-Commerce Video Ad & Content Studio</span>
+        {/* Footer */}
+        <footer className="border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-500 mt-12">
+          <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div className="flex items-center gap-2 font-medium">
+              <span className="text-slate-900 font-bold">KontenKU</span>
+              <span>• E-Commerce Video Ad & Content Studio</span>
+            </div>
+            <div className="flex items-center gap-4 text-slate-500">
+              <span>Link-to-Video</span>
+              <span>Seedance Engine</span>
+              <span>Digital Avatars</span>
+              <span>Auto-Publish TikTok & Reels</span>
+            </div>
           </div>
-          <div className="flex items-center gap-4 text-slate-500">
-            <span>Link-to-Video</span>
-            <span>Seedance Engine</span>
-            <span>Digital Avatars</span>
-            <span>Auto-Publish TikTok & Reels</span>
-          </div>
-        </div>
-      </footer>
+        </footer>
 
-      {/* Export & Download Modal */}
-      <ExportModal
-        isOpen={isExportModalOpen}
-        onClose={() => setIsExportModalOpen(false)}
-        project={project}
-        onChangeProject={handleUpdateProject}
-      />
-    </div>
+        {/* Export & Download Modal */}
+        <ExportModal
+          isOpen={isExportModalOpen}
+          onClose={() => setIsExportModalOpen(false)}
+          project={project}
+          onChangeProject={handleUpdateProject}
+        />
+
+        {/* Non-Blocking Background Render Queue Dock */}
+        <BackgroundRenderDock />
+      </div>
+    </RenderQueueProvider>
   );
 }

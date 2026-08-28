@@ -67,7 +67,19 @@ export const AiCoreTab: React.FC<AiCoreTabProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<'script' | 'hook_matrix' | 'seedance' | 'avatar'>('script');
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [selectedSceneForSeedance, setSelectedSceneForSeedance] = useState<StoryboardScene>(
-    project.storyboard[0] || {}
+    project.storyboard[0] || {
+      id: 'sc-default',
+      sceneNumber: 1,
+      sceneType: 'hook',
+      durationSeconds: 3,
+      voiceoverText: '',
+      avatarAction: '',
+      visualPrompt: '',
+      visualUrl: '',
+      onScreenText: '',
+      cameraMovement: 'static',
+      transition: 'cut',
+    }
   );
   const [seedanceEditPrompt, setSeedanceEditPrompt] = useState('');
   const [isSeedanceProcessing, setIsSeedanceProcessing] = useState(false);

@@ -22,18 +22,34 @@ import {
   Square,
   Zap,
   Radio,
-  Bell
+  Bell,
+  Flame,
+  Clock,
+  Tag,
+  ShoppingBag,
+  TrendingUp,
+  Target,
+  FileDown,
+  Copy,
+  Check
 } from 'lucide-react';
 import {
   PippitProject,
   StoryboardScene,
   PromptChainStep,
   CaptionStyle,
-  BackgroundMusicTrack
+  CaptionPresetType,
+  BackgroundMusicTrack,
+  HookVariant
 } from '../../types';
 import { SAMPLE_BGM_TRACKS } from '../../data/samplePresets';
 import { promptChainStepApi } from '../../services/api';
 import { soundSynth } from '../../utils/audioSynth';
+import { parseStoryboardToKineticWords, generateSrtContent, getActiveWordIndexAtTime } from '../../utils/kineticCaptionParser';
+import { KineticCaptionsOverlay } from './KineticCaptionsOverlay';
+import { DynamicStickersOverlay } from './DynamicStickersOverlay';
+import { DynamicStickersPanel } from './DynamicStickersPanel';
+import { WatermarkOverlay } from '../Distribution/WatermarkOverlay';
 
 interface QuickEditTabProps {
   project: PippitProject;
@@ -46,7 +62,9 @@ export const QuickEditTab: React.FC<QuickEditTabProps> = ({
   onChangeProject,
   onProceedToDistribution,
 }) => {
-  const [activeTool, setActiveTool] = useState<'chain' | 'bg_removal' | 'captions' | 'audio' | 'sfx_soundboard'>('chain');
+  const [activeTool, setActiveTool] = useState<
+    'captions' | 'stickers' | 'hooks' | 'chain' | 'bg_removal' | 'audio' | 'sfx_soundboard'
+  >('captions');
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
@@ -58,6 +76,16 @@ export const QuickEditTab: React.FC<QuickEditTabProps> = ({
   const [isRemovingBg, setIsRemovingBg] = useState(false);
   const [removedBgSuccess, setRemovedBgSuccess] = useState(false);
   const [activeSfxPlayed, setActiveSfxPlayed] = useState<string | null>(null);
+  const [copiedSrt, setCopiedSrt] = useState(false);
+
+  // Helper to compute scene start time
+  const getSceneStartTime = (sceneIdx: number) => {
+    let start = 0;
+    for (let i = 0; i < sceneIdx; i++) {
+      start += project.storyboard[i]?.durationSeconds || 3;
+    }
+    return start;
+  };
 
   // Calculate total duration in seconds
   const totalDuration = project.storyboard.reduce((acc, sc) => acc + (sc.durationSeconds || 3), 0);
@@ -233,20 +261,34 @@ export const QuickEditTab: React.FC<QuickEditTabProps> = ({
               {/* Overlay Gradient */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/40 pointer-events-none" />
 
+              {/* Brand Watermark Overlay */}
+              <WatermarkOverlay
+                config={project.watermarkConfig}
+                accountHandle={project.scheduledPosts[0]?.accountHandle || '@glowluxe.official'}
+                brandName={project.inputData.productAnalysis?.brandName || 'GlowLuxe Official'}
+              />
+
+              {/* Dynamic Stickers & Flash Sale Countdown Overlay */}
+              <DynamicStickersOverlay
+                stickers={project.dynamicStickers || []}
+                activeScene={activeScene}
+                currentTime={currentTime}
+              />
+
               {/* Top Layer: Scene Badge & BGM pill */}
-              <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
-                <span className="text-[10px] font-bold uppercase px-2 py-1 bg-black/70 backdrop-blur-md text-amber-300 rounded-md border border-amber-500/30">
+              <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none z-20">
+                <span className="text-[10px] font-bold uppercase px-2.5 py-1 bg-black/70 backdrop-blur-md text-amber-300 rounded-lg border border-amber-500/30 shadow-md">
                   Scene #{activeScene?.sceneNumber}: {activeScene?.sceneType}
                 </span>
 
-                <span className="text-[10px] font-medium px-2 py-1 bg-black/70 backdrop-blur-md text-slate-200 rounded-md border border-slate-700 flex items-center gap-1">
+                <span className="text-[10px] font-medium px-2 py-1 bg-black/70 backdrop-blur-md text-slate-200 rounded-lg border border-slate-700 flex items-center gap-1">
                   <Music className="w-2.5 h-2.5 text-indigo-400" />
-                  <span className="truncate max-w-[100px]">{project.selectedBgm.title}</span>
+                  <span className="truncate max-w-[90px]">{project.selectedBgm.title}</span>
                 </span>
               </div>
 
               {/* Digital Avatar PiP (Corner Overlay with Live Talking Animation) */}
-              <div className="absolute bottom-24 right-3 w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-indigo-500 shadow-xl bg-slate-950 z-20">
+              <div className="absolute bottom-24 right-3 w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-indigo-500 shadow-2xl bg-slate-950 z-20">
                 <img
                   src={project.selectedAvatar.avatarImage}
                   alt={project.selectedAvatar.name}
@@ -261,36 +303,22 @@ export const QuickEditTab: React.FC<QuickEditTabProps> = ({
                 </div>
               </div>
 
-              {/* Auto Subtitle / Karaoke On-Screen Dynamic Captions */}
-              <div
-                className="absolute inset-x-3 text-center pointer-events-none z-10"
-                style={{ top: `${project.captionStyle.positionY}%` }}
-              >
-                <div
-                  className="inline-block px-3 py-1.5 rounded-xl shadow-2xl transition-all duration-200"
-                  style={{
-                    backgroundColor: project.captionStyle.backgroundColor || 'rgba(0,0,0,0.7)',
-                    color: project.captionStyle.textColor || '#ffffff',
-                    fontFamily: project.captionStyle.fontFamily || 'Montserrat',
-                    fontSize: `${project.captionStyle.fontSize * 0.75}px`,
-                    textTransform: project.captionStyle.uppercase ? 'uppercase' : 'none',
-                    WebkitTextStroke: `${project.captionStyle.strokeWidth * 0.5}px ${project.captionStyle.strokeColor || '#000000'}`,
-                  }}
-                >
-                  <span className="font-extrabold tracking-wide" style={{ color: project.captionStyle.highlightColor }}>
-                    {activeScene?.onScreenText}
-                  </span>
-                </div>
-              </div>
+              {/* Kinetic Animated Captions (Word-by-word active karaoke) */}
+              <KineticCaptionsOverlay
+                scene={activeScene}
+                currentTime={currentTime}
+                sceneStartTime={getSceneStartTime(currentSceneIndex)}
+                captionStyle={project.captionStyle}
+              />
 
               {/* TikTok Yellow Cart Anchor CTA (When in CTA scene or bottom left) */}
               {activeScene?.sceneType === 'cta' && (
-                <div className="absolute bottom-4 left-3 right-3 bg-amber-400 text-slate-950 font-bold text-xs px-3 py-2 rounded-xl shadow-2xl flex items-center justify-between animate-bounce z-20">
+                <div className="absolute bottom-4 left-3 right-3 bg-amber-400 text-slate-950 font-black text-xs px-3.5 py-2.5 rounded-2xl shadow-2xl flex items-center justify-between animate-bounce z-20 border border-amber-300">
                   <div className="flex items-center gap-1.5 truncate">
                     <span className="text-base">🛍️</span>
                     <span className="truncate">Keranjang Kuning: Diskon 45%</span>
                   </div>
-                  <span className="text-[10px] bg-slate-900 text-white px-2 py-0.5 rounded-md shrink-0 font-semibold">
+                  <span className="text-[10px] bg-slate-950 text-white px-2.5 py-1 rounded-xl shrink-0 font-bold">
                     Beli Sekarang
                   </span>
                 </div>
@@ -368,13 +396,15 @@ export const QuickEditTab: React.FC<QuickEditTabProps> = ({
         <div className="lg:col-span-7 space-y-6">
           
           {/* Tool Module Tabs */}
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100 border border-slate-200 rounded-2xl overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-1.5 p-1.5 bg-slate-100 border border-slate-200 rounded-2xl overflow-x-auto no-scrollbar">
             {[
-              { id: 'chain', label: '1. Prompt Chaining', icon: Wand2 },
-              { id: 'bg_removal', label: '2. BG Removal AI', icon: Scissors },
-              { id: 'captions', label: '3. Karaoke Captions', icon: Type },
-              { id: 'audio', label: '4. Audio & BGM Mixer', icon: Volume2 },
-              { id: 'sfx_soundboard', label: '5. Viral SFX Soundboard', icon: Zap },
+              { id: 'captions', label: '1. Kinetic Captions', icon: Type },
+              { id: 'stickers', label: '2. Dynamic Stickers & Flash Sale', icon: Flame },
+              { id: 'hooks', label: '3. Multi-Hook A/B', icon: Target },
+              { id: 'chain', label: '4. Prompt Chaining', icon: Wand2 },
+              { id: 'bg_removal', label: '5. BG Removal AI', icon: Scissors },
+              { id: 'audio', label: '6. Audio Mixer', icon: Volume2 },
+              { id: 'sfx_soundboard', label: '7. SFX Soundboard', icon: Zap },
             ].map((tool) => {
               const Icon = tool.icon;
               const isActive = activeTool === tool.id;
@@ -382,9 +412,9 @@ export const QuickEditTab: React.FC<QuickEditTabProps> = ({
                 <button
                   key={tool.id}
                   onClick={() => setActiveTool(tool.id as any)}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition shrink-0 ${
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition shrink-0 ${
                     isActive
-                      ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/80'
+                      ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/80'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                   }`}
                 >
@@ -394,6 +424,597 @@ export const QuickEditTab: React.FC<QuickEditTabProps> = ({
               );
             })}
           </div>
+
+          {/* MODULE 1: Kinetic Auto-Captions & Subtitle Styling */}
+          {activeTool === 'captions' && (
+            <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 space-y-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                <div>
+                  <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                    <Type className="w-5 h-5 text-indigo-600" />
+                    <span>Kinetic Subtitles & Viral Karaoke Styler</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Animasi teks kata-per-kata yang bergerak sinkron dengan narasi suara. Terbukti meningkatkan *watch time* hingga 80%.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => {
+                    const parsed = parseStoryboardToKineticWords(project.storyboard, (project.captionStyle.syncOffsetMs || 0) / 1000);
+                    const srtContent = generateSrtContent(parsed.words);
+                    navigator.clipboard.writeText(srtContent);
+                    setCopiedSrt(true);
+                    setTimeout(() => setCopiedSrt(false), 2500);
+                  }}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition flex items-center gap-1.5 shrink-0"
+                >
+                  {copiedSrt ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="text-emerald-700 font-semibold">Tersalin ke Clipboard!</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileDown className="w-3.5 h-3.5" />
+                      <span>Salin Naskah SRT Subtitles</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* 7 Viral Preset Cards */}
+              <div className="space-y-3">
+                <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Pilih Preset Gaya Viral TikTok / Reels:
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {[
+                    {
+                      id: 'hormozi_bold' as CaptionPresetType,
+                      name: 'Alex Hormozi Viral Pop',
+                      description: 'Bold uppercase, highlight kuning/hijau kontras, outline tebal & word pop scale.',
+                      badge: '🔥 80% Retensi TikTok',
+                      sampleHighlight: '#FACC15',
+                      style: {
+                        presetType: 'hormozi_bold' as CaptionPresetType,
+                        fontFamily: 'Montserrat' as const,
+                        fontSize: 24,
+                        highlightColor: '#FACC15',
+                        strokeColor: '#000000',
+                        strokeWidth: 4,
+                        uppercase: true,
+                        animation: 'hormozi_pulse' as const,
+                        positionY: 74,
+                        autoKeywordsHighlight: true,
+                        showEmojiBadges: true,
+                      },
+                    },
+                    {
+                      id: 'mrbeast_impact' as CaptionPresetType,
+                      name: 'MrBeast High-Urgency Impact',
+                      description: 'Font tebal Impact dengan warna merah neon + kuning, tanpa background box.',
+                      badge: '⚡ Extreme Hype',
+                      sampleHighlight: '#EF4444',
+                      style: {
+                        presetType: 'mrbeast_impact' as CaptionPresetType,
+                        fontFamily: 'Impact' as const,
+                        fontSize: 26,
+                        highlightColor: '#EF4444',
+                        strokeColor: '#000000',
+                        strokeWidth: 5,
+                        uppercase: true,
+                        animation: 'bounce' as const,
+                        positionY: 72,
+                        autoKeywordsHighlight: true,
+                        showEmojiBadges: true,
+                      },
+                    },
+                    {
+                      id: 'tiktok_viral_yellow' as CaptionPresetType,
+                      name: 'TikTok FYP Yellow Translucent',
+                      description: 'Gaya klasik CapCut FYP dengan latar hitam transparan dan teks kuning cerah.',
+                      badge: '⭐ Paling Populer',
+                      sampleHighlight: '#FACC15',
+                      style: {
+                        presetType: 'tiktok_viral_yellow' as CaptionPresetType,
+                        fontFamily: 'Montserrat' as const,
+                        fontSize: 22,
+                        highlightColor: '#FACC15',
+                        strokeColor: '#000000',
+                        strokeWidth: 3,
+                        uppercase: true,
+                        animation: 'karaoke_glow' as const,
+                        positionY: 76,
+                        autoKeywordsHighlight: true,
+                        showEmojiBadges: false,
+                      },
+                    },
+                    {
+                      id: 'clean_minimal_pill' as CaptionPresetType,
+                      name: 'Clean Aesthetic Frosted Pill',
+                      description: 'Pill semi-transparan dengan aksen hijau emerald lembut dan font clean modern.',
+                      badge: '✨ Aesthetic Skincare',
+                      sampleHighlight: '#10B981',
+                      style: {
+                        presetType: 'clean_minimal_pill' as CaptionPresetType,
+                        fontFamily: 'Plus Jakarta Sans' as const,
+                        fontSize: 20,
+                        highlightColor: '#10B981',
+                        strokeColor: 'transparent',
+                        strokeWidth: 0,
+                        uppercase: false,
+                        animation: 'simple_fade' as const,
+                        positionY: 78,
+                        boxBackground: 'rgba(0,0,0,0.5)',
+                        autoKeywordsHighlight: false,
+                        showEmojiBadges: false,
+                      },
+                    },
+                    {
+                      id: 'cyber_neon' as CaptionPresetType,
+                      name: 'Cyber Neon RGB Glow',
+                      description: 'Glow neon cyan dan magenta elektrik dengan font Bebas Neue yang tegas.',
+                      badge: '🚀 Tech & Gaming',
+                      sampleHighlight: '#22D3EE',
+                      style: {
+                        presetType: 'cyber_neon' as CaptionPresetType,
+                        fontFamily: 'Bebas Neue' as const,
+                        fontSize: 26,
+                        highlightColor: '#22D3EE',
+                        strokeColor: '#0F172A',
+                        strokeWidth: 3,
+                        uppercase: true,
+                        animation: 'word_pop' as const,
+                        positionY: 74,
+                        autoKeywordsHighlight: true,
+                        showEmojiBadges: true,
+                      },
+                    },
+                    {
+                      id: 'luxury_serif' as CaptionPresetType,
+                      name: 'Luxury Editorial Gold',
+                      description: 'Tipografi Playfair dengan aksen emas premium untuk brand mewah dan parfum.',
+                      badge: '💎 Luxury Brand',
+                      sampleHighlight: '#F59E0B',
+                      style: {
+                        presetType: 'luxury_serif' as CaptionPresetType,
+                        fontFamily: 'Playfair' as const,
+                        fontSize: 22,
+                        highlightColor: '#F59E0B',
+                        strokeColor: '#000000',
+                        strokeWidth: 2,
+                        uppercase: false,
+                        animation: 'slide_up' as const,
+                        positionY: 78,
+                        autoKeywordsHighlight: false,
+                        showEmojiBadges: false,
+                      },
+                    },
+                  ].map((preset) => {
+                    const isSelected =
+                      (project.captionStyle.presetType || 'hormozi_bold') === preset.id;
+                    return (
+                      <button
+                        key={preset.id}
+                        onClick={() => {
+                          soundSynth.playSound('pop');
+                          onChangeProject({
+                            captionStyle: {
+                              ...project.captionStyle,
+                              ...preset.style,
+                            },
+                          });
+                        }}
+                        className={`p-3.5 rounded-2xl border text-left transition-all flex flex-col justify-between gap-2 ${
+                          isSelected
+                            ? 'bg-indigo-50/70 border-indigo-600 shadow-sm ring-2 ring-indigo-500/20'
+                            : 'bg-slate-50 border-slate-200 hover:border-slate-300 hover:bg-slate-100/50'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between gap-1 mb-1">
+                            <span className="text-xs font-black text-slate-900">{preset.name}</span>
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800">
+                              {preset.badge}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 leading-tight">
+                            {preset.description}
+                          </p>
+                        </div>
+
+                        {/* Visual Pill Preview */}
+                        <div className="flex items-center justify-between pt-1 border-t border-slate-200/60">
+                          <span
+                            className="text-xs font-extrabold px-2 py-0.5 rounded bg-black text-white"
+                            style={{ color: preset.sampleHighlight }}
+                          >
+                            VIRAL TEXT
+                          </span>
+                          {isSelected && (
+                            <span className="text-[10px] font-bold text-indigo-600 flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-indigo-600" />
+                              <span>Aktif</span>
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Synchronized Voiceover Word Scrubber / Timeline Inspector */}
+              <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Sinkronisasi Kata Narasi Suara (Scene #{activeScene.sceneNumber})</span>
+                  </span>
+                  <span className="text-[10px] text-indigo-600 font-mono">
+                    Klik kata untuk uji dengar & seek timeline
+                  </span>
+                </div>
+
+                {/* Parsed word tokens for current scene */}
+                {(() => {
+                  const sceneStartTime = getSceneStartTime(currentSceneIndex);
+                  const parsed = parseStoryboardToKineticWords(
+                    [activeScene],
+                    sceneStartTime + (project.captionStyle.syncOffsetMs || 0) / 1000
+                  );
+                  const activeWordIdx = getActiveWordIndexAtTime(parsed.words, currentTime);
+
+                  return (
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-white rounded-xl border border-indigo-100/80 max-h-32 overflow-y-auto">
+                      {parsed.words.length === 0 ? (
+                        <span className="text-xs text-slate-400 italic">Tidak ada naskah narasi di scene ini.</span>
+                      ) : (
+                        parsed.words.map((w, idx) => {
+                          const isActiveWord = idx === activeWordIdx;
+                          return (
+                            <button
+                              key={w.id}
+                              onClick={() => {
+                                setCurrentTime(w.startTime);
+                                soundSynth.playSound('pop');
+                              }}
+                              className={`px-2 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1 ${
+                                isActiveWord
+                                  ? 'bg-indigo-600 text-white shadow-xs scale-105 ring-2 ring-indigo-400/50'
+                                  : w.isKeyword
+                                  ? 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'
+                                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                              }`}
+                              title={`${w.startTime.toFixed(2)}s - ${w.endTime.toFixed(2)}s`}
+                            >
+                              {w.emojiTag && <span>{w.emojiTag}</span>}
+                              <span>{w.word}</span>
+                              <span className="text-[9px] opacity-60 font-mono">
+                                {w.startTime.toFixed(1)}s
+                              </span>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Audio/Voiceover Timing Sync Offset Slider */}
+                <div className="pt-2 border-t border-indigo-100/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-semibold text-slate-700">Offset Audio Sinkron:</span>
+                    <span className="text-xs font-mono font-bold text-indigo-700 bg-white px-2 py-0.5 rounded border border-indigo-200">
+                      {project.captionStyle.syncOffsetMs || 0} ms
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-1 sm:max-w-xs">
+                    <span className="text-[10px] text-slate-400">-500ms</span>
+                    <input
+                      type="range"
+                      min="-500"
+                      max="500"
+                      step="25"
+                      value={project.captionStyle.syncOffsetMs || 0}
+                      onChange={(e) =>
+                        onChangeProject({
+                          captionStyle: { ...project.captionStyle, syncOffsetMs: parseInt(e.target.value) },
+                        })
+                      }
+                      className="w-full accent-indigo-600"
+                    />
+                    <span className="text-[10px] text-slate-400">+500ms</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Detailed Fine-Tuning Controls */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+                <div className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <Sliders className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Pengaturan Detail Tipografi & Posisi</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Font Family */}
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                      Jenis Font
+                    </label>
+                    <select
+                      value={project.captionStyle.fontFamily}
+                      onChange={(e) =>
+                        onChangeProject({
+                          captionStyle: { ...project.captionStyle, fontFamily: e.target.value as any },
+                        })
+                      }
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    >
+                      <option value="Montserrat">Montserrat (CapCut Viral)</option>
+                      <option value="Bebas Neue">Bebas Neue (Punchy Bold)</option>
+                      <option value="Impact">Impact (Hormozi / Meme)</option>
+                      <option value="Plus Jakarta Sans">Plus Jakarta Sans (Modern Clean)</option>
+                      <option value="Playfair">Playfair (Luxury Aesthetic)</option>
+                      <option value="Inter">Inter (Minimal Tech)</option>
+                    </select>
+                  </div>
+
+                  {/* Font Size */}
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                      Ukuran Teks: {project.captionStyle.fontSize}px
+                    </label>
+                    <input
+                      type="range"
+                      min="18"
+                      max="34"
+                      value={project.captionStyle.fontSize}
+                      onChange={(e) =>
+                        onChangeProject({
+                          captionStyle: { ...project.captionStyle, fontSize: parseInt(e.target.value) },
+                        })
+                      }
+                      className="w-full accent-indigo-600 mt-1"
+                    />
+                  </div>
+
+                  {/* Vertical Position */}
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                      Posisi Vertikal ({project.captionStyle.positionY}%)
+                    </label>
+                    <input
+                      type="range"
+                      min="40"
+                      max="85"
+                      value={project.captionStyle.positionY}
+                      onChange={(e) =>
+                        onChangeProject({
+                          captionStyle: { ...project.captionStyle, positionY: parseInt(e.target.value) },
+                        })
+                      }
+                      className="w-full accent-indigo-600 mt-1"
+                    />
+                  </div>
+                </div>
+
+                {/* Highlight Color Pickers */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-200">
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px] font-semibold text-slate-700">Warna Highlight Aktif:</span>
+                    <div className="flex items-center gap-1.5">
+                      {[
+                        { code: '#FACC15', label: 'TikTok Yellow' },
+                        { code: '#4ADE80', label: 'Neon Green' },
+                        { code: '#EF4444', label: 'Bright Red' },
+                        { code: '#22D3EE', label: 'Cyan Glow' },
+                        { code: '#F43F5E', label: 'Pink Rose' },
+                      ].map((c) => (
+                        <button
+                          key={c.code}
+                          onClick={() =>
+                            onChangeProject({
+                              captionStyle: { ...project.captionStyle, highlightColor: c.code },
+                            })
+                          }
+                          style={{ backgroundColor: c.code }}
+                          className={`w-6 h-6 rounded-full border-2 transition ${
+                            project.captionStyle.highlightColor === c.code
+                              ? 'border-slate-950 scale-110 shadow-xs'
+                              : 'border-slate-300'
+                          }`}
+                          title={c.label}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Toggles */}
+                  <div className="flex flex-wrap items-center gap-4">
+                    <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-800">
+                      <input
+                        type="checkbox"
+                        checked={project.captionStyle.uppercase}
+                        onChange={(e) =>
+                          onChangeProject({
+                            captionStyle: { ...project.captionStyle, uppercase: e.target.checked },
+                          })
+                        }
+                        className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+                      />
+                      <span>UPPERCASE</span>
+                    </label>
+
+                    <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-800">
+                      <input
+                        type="checkbox"
+                        checked={project.captionStyle.autoKeywordsHighlight !== false}
+                        onChange={(e) =>
+                          onChangeProject({
+                            captionStyle: { ...project.captionStyle, autoKeywordsHighlight: e.target.checked },
+                          })
+                        }
+                        className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+                      />
+                      <span>Auto-Highlight Promo</span>
+                    </label>
+
+                    <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-800">
+                      <input
+                        type="checkbox"
+                        checked={project.captionStyle.showEmojiBadges !== false}
+                        onChange={(e) =>
+                          onChangeProject({
+                            captionStyle: { ...project.captionStyle, showEmojiBadges: e.target.checked },
+                          })
+                        }
+                        className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+                      />
+                      <span>Emoji Badges 🔥</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MODULE 2: Dynamic Stickers & Flash Sale Countdown */}
+          {activeTool === 'stickers' && (
+            <DynamicStickersPanel
+              project={project}
+              onChangeProject={onChangeProject}
+            />
+          )}
+
+          {/* MODULE 3: Multi-Hook A/B Test Switcher */}
+          {activeTool === 'hooks' && (
+            <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 space-y-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                <div>
+                  <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                    <Target className="w-5 h-5 text-indigo-600" />
+                    <span>Multi-Hook A/B Testing Studio</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Ganti detik 0-3 video utama dengan 5 variasi sudut psikologi yang berbeda untuk menemukan hook dengan CTR tertinggi.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => {
+                    soundSynth.playSound('whoosh');
+                    const firstHook = project.hookVariants?.[0];
+                    if (firstHook) {
+                      const updatedScenes = project.storyboard.map((sc, idx) => {
+                        if (idx === 0 || sc.sceneType === 'hook') {
+                          return {
+                            ...sc,
+                            voiceoverText: firstHook.voiceoverText,
+                            onScreenText: firstHook.onScreenText,
+                            visualPrompt: firstHook.visualPrompt,
+                            visualUrl: firstHook.visualUrl || sc.visualUrl,
+                          };
+                        }
+                        return sc;
+                      });
+                      onChangeProject({
+                        storyboard: updatedScenes,
+                        selectedHookId: firstHook.id,
+                      });
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl transition flex items-center gap-1.5 shrink-0"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Reset ke Hook Rekomendasi</span>
+                </button>
+              </div>
+
+              {/* Hook Variants List */}
+              <div className="space-y-3">
+                {(project.hookVariants || []).map((hook, idx) => {
+                  const isCurrentActive =
+                    project.selectedHookId === hook.id ||
+                    (project.storyboard[0]?.voiceoverText === hook.voiceoverText);
+
+                  return (
+                    <div
+                      key={hook.id}
+                      className={`p-4 rounded-2xl border-2 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                        isCurrentActive
+                          ? 'bg-indigo-50/70 border-indigo-600 shadow-md ring-2 ring-indigo-500/20'
+                          : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="space-y-1.5 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[10px] font-bold flex items-center justify-center">
+                            {idx + 1}
+                          </span>
+                          <span className="text-xs font-black text-slate-900">{hook.angleTitle}</span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-0.5">
+                            <TrendingUp className="w-3 h-3" />
+                            {hook.predictedCtrLift}
+                          </span>
+                        </div>
+
+                        <div className="text-xs font-mono font-bold text-indigo-900 bg-white/80 p-2 rounded-xl border border-indigo-100">
+                          {hook.onScreenText}
+                        </div>
+
+                        <p className="text-[11px] text-slate-600 italic">
+                          "{hook.voiceoverText}"
+                        </p>
+                      </div>
+
+                      <div className="flex sm:flex-col items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => {
+                            soundSynth.playSound('pop');
+                            const updatedScenes = project.storyboard.map((sc, scIdx) => {
+                              if (scIdx === 0 || sc.sceneType === 'hook') {
+                                return {
+                                  ...sc,
+                                  voiceoverText: hook.voiceoverText,
+                                  onScreenText: hook.onScreenText,
+                                  visualPrompt: hook.visualPrompt,
+                                  visualUrl: hook.visualUrl || sc.visualUrl,
+                                };
+                              }
+                              return sc;
+                            });
+
+                            onChangeProject({
+                              storyboard: updatedScenes,
+                              selectedHookId: hook.id,
+                            });
+                          }}
+                          className={`px-4 py-2 rounded-xl text-xs font-bold transition active:scale-95 flex items-center gap-1.5 ${
+                            isCurrentActive
+                              ? 'bg-emerald-600 text-white shadow-sm'
+                              : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                          }`}
+                        >
+                          {isCurrentActive ? (
+                            <>
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Hook Aktif</span>
+                            </>
+                          ) : (
+                            <span>Pasang ke Video</span>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* MODULE 1: Prompt Chaining Wizard */}
           {activeTool === 'chain' && (
@@ -603,129 +1224,7 @@ export const QuickEditTab: React.FC<QuickEditTabProps> = ({
             </div>
           )}
 
-          {/* MODULE 3: Karaoke Captions & Subtitles Customizer */}
-          {activeTool === 'captions' && (
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-5 shadow-sm">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Type className="w-4 h-4 text-indigo-600" />
-                  <span>Kustomisasi Takarir / Subtitle Otomatis</span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Sesuaikan gaya tipografi, warna highlight karaoke, dan posisi teks agar ramah algoritma FYP TikTok.
-                </p>
-              </div>
-
-              {/* Font Family & Size */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1.5">
-                    Gaya Font
-                  </label>
-                  <select
-                    value={project.captionStyle.fontFamily}
-                    onChange={(e) =>
-                      onChangeProject({
-                        captionStyle: { ...project.captionStyle, fontFamily: e.target.value as any },
-                      })
-                    }
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                  >
-                    <option value="Montserrat">Montserrat (CapCut Viral Style)</option>
-                    <option value="Bebas Neue">Bebas Neue (Punchy Bold)</option>
-                    <option value="Impact">Impact (High Urgency Meme)</option>
-                    <option value="Playfair">Playfair (Luxury Aesthetic)</option>
-                    <option value="Inter">Inter (Clean Modern)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1.5">
-                    Ukuran Font: {project.captionStyle.fontSize}px
-                  </label>
-                  <input
-                    type="range"
-                    min="18"
-                    max="36"
-                    value={project.captionStyle.fontSize}
-                    onChange={(e) =>
-                      onChangeProject({
-                        captionStyle: { ...project.captionStyle, fontSize: parseInt(e.target.value) },
-                      })
-                    }
-                    className="w-full accent-indigo-600 mt-2"
-                  />
-                </div>
-              </div>
-
-              {/* Highlight Color & Animation */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1.5">
-                    Warna Highlight Kata
-                  </label>
-                  <div className="flex items-center gap-2">
-                    {[
-                      { code: '#FACC15', label: 'TikTok Yellow' },
-                      { code: '#22C55E', label: 'Emerald Green' },
-                      { code: '#F43F5E', label: 'Rose Pink' },
-                      { code: '#38BDF8', label: 'Sky Cyan' },
-                    ].map((c) => (
-                      <button
-                        key={c.code}
-                        onClick={() =>
-                          onChangeProject({
-                            captionStyle: { ...project.captionStyle, highlightColor: c.code },
-                          })
-                        }
-                        style={{ backgroundColor: c.code }}
-                        className={`w-7 h-7 rounded-full border-2 transition ${
-                          project.captionStyle.highlightColor === c.code ? 'border-slate-900 scale-110 shadow-xs' : 'border-slate-300'
-                        }`}
-                        title={c.label}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 block mb-1.5">
-                    Posisi Vertikal ({project.captionStyle.positionY}%)
-                  </label>
-                  <input
-                    type="range"
-                    min="30"
-                    max="90"
-                    value={project.captionStyle.positionY}
-                    onChange={(e) =>
-                      onChangeProject({
-                        captionStyle: { ...project.captionStyle, positionY: parseInt(e.target.value) },
-                      })
-                    }
-                    className="w-full accent-indigo-600 mt-2"
-                  />
-                </div>
-              </div>
-
-              {/* Uppercase & Animation Style */}
-              <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs">
-                <span className="text-slate-800 font-medium">Teks Huruf Kapital Otomatis (UPPERCASE)</span>
-                <input
-                  type="checkbox"
-                  checked={project.captionStyle.uppercase}
-                  onChange={(e) =>
-                    onChangeProject({
-                      captionStyle: { ...project.captionStyle, uppercase: e.target.checked },
-                    })
-                  }
-                  className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
-                />
-              </div>
-
-            </div>
-          )}
-
-          {/* MODULE 4: Audio & BGM Mixer */}
+          {/* MODULE 6: Audio & BGM Mixer */}
           {activeTool === 'audio' && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-5 shadow-sm">
               <div>
