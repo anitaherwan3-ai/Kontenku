@@ -6,6 +6,8 @@ import { AiCoreTab } from './components/AiCore/AiCoreTab';
 import { QuickEditTab } from './components/QuickEditStudio/QuickEditTab';
 import { DistributionTab } from './components/Distribution/DistributionTab';
 import { ExportModal } from './components/Modals/ExportModal';
+import { BrandSettingsModal } from './components/Modals/BrandSettingsModal';
+import { SystemSettingsModal } from './components/Modals/SystemSettingsModal';
 import { PippitProject, InputLayerData, StoryboardScene, DigitalAvatar, TTSSettings, UploadedAsset } from './types';
 import { INITIAL_DEFAULT_PROJECT, DEMO_PRESET_PRODUCTS, SAMPLE_AVATARS } from './data/samplePresets';
 import { RenderQueueProvider } from './context/RenderQueueContext';
@@ -15,6 +17,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'input' | 'media' | 'aicore' | 'quickedit' | 'distribution'>('input');
   const [project, setProject] = useState<PippitProject>(INITIAL_DEFAULT_PROJECT);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isBrandModalOpen, setIsBrandModalOpen] = useState(false);
+  const [isSystemSettingsOpen, setIsSystemSettingsOpen] = useState(false);
 
   // Partial update helper
   const handleUpdateProject = (fields: Partial<PippitProject>) => {
@@ -214,6 +218,8 @@ export default function App() {
           project={project}
           onLoadPreset={handleLoadPreset}
           onOpenExportModal={() => setIsExportModalOpen(true)}
+          onOpenBrandSettings={() => setIsBrandModalOpen(true)}
+          onOpenSystemSettings={() => setIsSystemSettingsOpen(true)}
         />
 
         {/* Main Content View Switcher */}
@@ -243,6 +249,7 @@ export default function App() {
               onChangeAvatar={handleUpdateAvatar}
               onChangeTtsSettings={handleUpdateTtsSettings}
               onProceedToQuickEdit={() => setActiveTab('quickedit')}
+              onChangeProject={handleUpdateProject}
             />
           )}
 
@@ -251,6 +258,7 @@ export default function App() {
               project={project}
               onChangeProject={handleUpdateProject}
               onProceedToDistribution={() => setActiveTab('distribution')}
+              onOpenBrandSettings={() => setIsBrandModalOpen(true)}
             />
           )}
 
@@ -259,6 +267,7 @@ export default function App() {
               project={project}
               onChangeProject={handleUpdateProject}
               onOpenExportModal={() => setIsExportModalOpen(true)}
+              onOpenSystemSettings={() => setIsSystemSettingsOpen(true)}
             />
           )}
         </main>
@@ -285,6 +294,23 @@ export default function App() {
           onClose={() => setIsExportModalOpen(false)}
           project={project}
           onChangeProject={handleUpdateProject}
+        />
+
+        {/* Brand Kit & Project Visual Settings Modal */}
+        <BrandSettingsModal
+          isOpen={isBrandModalOpen}
+          onClose={() => setIsBrandModalOpen(false)}
+          project={project}
+          onChangeProject={handleUpdateProject}
+        />
+
+        {/* System Settings, OAuth APIs, AI Engine & Webhooks Modal */}
+        <SystemSettingsModal
+          isOpen={isSystemSettingsOpen}
+          onClose={() => setIsSystemSettingsOpen(false)}
+          project={project}
+          onChangeProject={handleUpdateProject}
+          onLoadPreset={handleLoadPreset}
         />
 
         {/* Non-Blocking Background Render Queue Dock */}

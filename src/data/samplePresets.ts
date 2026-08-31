@@ -654,6 +654,85 @@ export const INITIAL_DEFAULT_PROJECT: PippitProject = {
     showTimestamp: false,
     showVerifiedIcon: true
   },
+  brandKit: {
+    brandName: 'GlowLuxe Skin Lab',
+    brandTagline: 'Dermatology-Grade Skin Barrier Science',
+    logoUrl: 'https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=300&auto=format&fit=crop&q=80',
+    primaryColor: '#6366f1', // Indigo
+    secondaryColor: '#f59e0b', // Amber/Gold
+    accentColor: '#10b981', // Emerald
+    neutralColor: '#0f172a', // Slate Dark
+    backgroundColor: '#ffffff',
+    fontFamilyHeading: 'Plus Jakarta Sans',
+    fontFamilyBody: 'Plus Jakarta Sans',
+    captionHighlightColor: '#fbbf24', // Amber 400
+    captionTextColor: '#ffffff',
+    captionBoxColor: '#0f172a',
+    watermarkEnabled: true,
+    watermarkPosition: 'top-right',
+    badgeStyle: 'modern_pill',
+    defaultToneOfVoice: 'Excited UGC, jujur, relatable, to-the-point',
+    autoApplyToCaptions: true,
+    autoApplyToWatermark: true,
+    autoApplyToStickers: true
+  },
+  threeActScript: {
+    scriptTitle: '3-Act Viral TikTok Ad: Problem-Solution & Flash Sale',
+    overallConcept: 'Struktur naskah 3 babak dengan Hook kontras harga, Demo tekstur cepat meresap, dan CTA diskon kilat keranjang kuning.',
+    targetHookAngle: 'Curiosity & Price Contrast Hook',
+    targetPacing: 'Fast-paced & High Retention',
+    estimatedWatchTime: '15.0s (Target Completion: 48%)',
+    acts: [
+      {
+        actNumber: 1,
+        actType: 'hook',
+        actTitle: 'Babak 1: The Viral Hook (0-3s)',
+        durationSeconds: 3,
+        voiceoverText: 'Stop buang jutaan rupiah buat perawatan klinik! Rahasia kulit glowing kaca ternyata cuma serum 80 ribuan ini!',
+        onScreenText: '😱 STOP BUANG JUTAAN! Kulit Glowing Modal 80K',
+        avatarAction: 'Ekspresi kaget sambil menunjuk ke kamera lalu mengangkat produk serum',
+        visualPrompt: 'POV front view: A trendy Gen-Z Indonesian girl with glowing dewy glass skin holding GlowLuxe serum bottle, energetic gesture, bright aesthetic bathroom backdrop, TikTok style 9:16 vertical high quality',
+        cameraMovement: 'zoom_in',
+        transition: 'zoom_blur',
+        bgSoundEffect: 'Whoosh + Record Scratch',
+        psychologicalAngle: 'Price Contrast & Visceral Problem Agitation',
+        keywordsUsed: ['serum viral', 'kulit glowing', 'diskon 80k', 'perawatan klinik'],
+        visualUrl: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=800&auto=format&fit=crop&q=80'
+      },
+      {
+        actNumber: 2,
+        actType: 'demo',
+        actTitle: 'Babak 2: The Demo & Problem Solution (3-12s)',
+        durationSeconds: 8,
+        voiceoverText: 'Ini dia GlowLuxe Serum! 10% Niacinamide murni plus 3X Ceramide. Teksturnya watery banget, langsung meresap dalam 5 detik tanpa rasa lengket sama sekali!',
+        onScreenText: '✨ 10% Niacinamide + 3X Ceramide (Watery & Cepat Meresap)',
+        avatarAction: 'Meneteskan serum ke pipi/tangan lalu mengusapnya dengan efek glowing seketika',
+        visualPrompt: 'Ultra macro slow motion: clear golden serum droplet falling from glass pipette onto smooth skin, instant hydration glow shimmer, pastel studio backdrop',
+        cameraMovement: 'pan_right',
+        transition: 'cut',
+        bgSoundEffect: 'Water Droplet Pop + Thock',
+        psychologicalAngle: 'Sensory ASMR Demo & Formula USP Proof',
+        keywordsUsed: ['10% Niacinamide', '3X Ceramide', 'Watery Gel', 'Cepat Meresap'],
+        visualUrl: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=800&auto=format&fit=crop&q=80'
+      },
+      {
+        actNumber: 3,
+        actType: 'cta',
+        actTitle: 'Babak 3: The Urgency CTA & Yellow Cart (12-15s)',
+        durationSeconds: 4,
+        voiceoverText: 'Lagi ada diskon flash sale 45% cuma buat 50 pembeli pertama! Klik keranjang kuning di kiri bawah sekarang juga sebelum kehabisan!',
+        onScreenText: '👇 KLIK KERANJANG KUNING (DISKON 45% HARI INI)',
+        avatarAction: 'Menunjuk ke sudut kiri bawah layar dengan ekspresi antusias',
+        visualPrompt: 'Big glowing TikTok Yellow Cart animation pulsing at bottom left, limited stock counter ticker, high conversion e-commerce CTA',
+        cameraMovement: 'dynamic_shake',
+        transition: 'glitch',
+        bgSoundEffect: 'Cash Register Cha-Ching',
+        psychologicalAngle: 'Scarcity Fear & Direct Action Command',
+        keywordsUsed: ['diskon 45%', 'flash sale', 'keranjang kuning', 'stok terbatas'],
+        visualUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800&auto=format&fit=crop&q=80'
+      }
+    ]
+  },
   dynamicStickers: [
     {
       id: 'sticker-countdown-1',
@@ -873,3 +952,5 @@ export const INITIAL_DEFAULT_PROJECT: PippitProject = {
     ]
   }
 };
+
+export const DEFAULT_PIPPIT_PROJECT = INITIAL_DEFAULT_PROJECT;

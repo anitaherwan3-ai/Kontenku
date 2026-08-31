@@ -104,7 +104,7 @@ export const BackgroundRenderDock: React.FC = () => {
 
       {/* Expanded Render Queue Drawer */}
       {isDockOpen && (
-        <div className="w-[360px] sm:w-[420px] max-h-[520px] flex flex-col bg-slate-950 text-slate-100 rounded-3xl shadow-2xl border border-slate-800 backdrop-blur-xl overflow-hidden animate-in fade-in slide-in-from-bottom-5 duration-200">
+        <div className="w-[calc(100vw-2rem)] sm:w-[420px] max-w-full max-h-[520px] flex flex-col bg-slate-950 text-slate-100 rounded-3xl shadow-2xl border border-slate-800 backdrop-blur-xl overflow-hidden animate-in fade-in slide-in-from-bottom-5 duration-200">
           {/* Header */}
           <div className="p-4 border-b border-slate-800/80 flex items-center justify-between bg-slate-900/60">
             <div className="flex items-center gap-2.5">

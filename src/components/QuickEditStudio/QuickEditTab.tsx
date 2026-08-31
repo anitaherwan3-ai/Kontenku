@@ -50,17 +50,20 @@ import { KineticCaptionsOverlay } from './KineticCaptionsOverlay';
 import { DynamicStickersOverlay } from './DynamicStickersOverlay';
 import { DynamicStickersPanel } from './DynamicStickersPanel';
 import { WatermarkOverlay } from '../Distribution/WatermarkOverlay';
+import { VideoPreviewPlayer } from './VideoPreviewPlayer';
 
 interface QuickEditTabProps {
   project: PippitProject;
   onChangeProject: (newProject: Partial<PippitProject>) => void;
   onProceedToDistribution: () => void;
+  onOpenBrandSettings?: () => void;
 }
 
 export const QuickEditTab: React.FC<QuickEditTabProps> = ({
   project,
   onChangeProject,
   onProceedToDistribution,
+  onOpenBrandSettings,
 }) => {
   const [activeTool, setActiveTool] = useState<
     'captions' | 'stickers' | 'hooks' | 'chain' | 'bg_removal' | 'audio' | 'sfx_soundboard'
@@ -192,204 +195,14 @@ export const QuickEditTab: React.FC<QuickEditTabProps> = ({
       {/* Main Studio Grid: Left Live Canvas, Right Editing Modules */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         
-        {/* Left Column: Live Video Canvas & Timeline Scrubber (5 cols) */}
-        <div className="lg:col-span-5 space-y-4">
-          <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-5 space-y-4 shadow-sm sticky top-24">
-            
-            {/* Canvas Header & Ratio Selector */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
-                <span className="text-xs font-bold text-slate-900 uppercase tracking-wider">Live Video Canvas</span>
-              </div>
-
-              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 text-[10px]">
-                <button
-                  onClick={() => onChangeProject({ inputData: { ...project.inputData, aspectRatio: '9:16' } })}
-                  className={`px-2 py-1 rounded flex items-center gap-1 font-semibold transition ${
-                    project.inputData.aspectRatio === '9:16' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <Smartphone className="w-3 h-3" />
-                  <span>9:16</span>
-                </button>
-                <button
-                  onClick={() => onChangeProject({ inputData: { ...project.inputData, aspectRatio: '1:1' } })}
-                  className={`px-2 py-1 rounded flex items-center gap-1 font-semibold transition ${
-                    project.inputData.aspectRatio === '1:1' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <Square className="w-3 h-3" />
-                  <span>1:1</span>
-                </button>
-                <button
-                  onClick={() => onChangeProject({ inputData: { ...project.inputData, aspectRatio: '16:9' } })}
-                  className={`px-2 py-1 rounded flex items-center gap-1 font-semibold transition ${
-                    project.inputData.aspectRatio === '16:9' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <Tv className="w-3 h-3" />
-                  <span>16:9</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Video Stage Frame */}
-            <div
-              className={`relative mx-auto rounded-2xl overflow-hidden bg-slate-950 border border-slate-200 shadow-xl transition-all duration-300 ${
-                project.inputData.aspectRatio === '9:16'
-                  ? 'aspect-[9/16] max-h-[500px] w-auto'
-                  : project.inputData.aspectRatio === '1:1'
-                  ? 'aspect-square max-h-[420px] w-full'
-                  : 'aspect-[16/9] max-h-[340px] w-full'
-              }`}
-            >
-              {/* Scene Visual Backdrop */}
-              <img
-                src={activeScene?.visualUrl || 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=800&auto=format&fit=crop&q=80'}
-                alt="Scene Backdrop"
-                className={`w-full h-full object-cover transition-transform duration-1000 ${
-                  isPlaying && activeScene?.cameraMovement === 'zoom_in'
-                    ? 'scale-110'
-                    : isPlaying && activeScene?.cameraMovement === 'dynamic_shake'
-                    ? 'scale-105 animate-pulse'
-                    : 'scale-100'
-                }`}
-                referrerPolicy="no-referrer"
-              />
-
-              {/* Overlay Gradient */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/40 pointer-events-none" />
-
-              {/* Brand Watermark Overlay */}
-              <WatermarkOverlay
-                config={project.watermarkConfig}
-                accountHandle={project.scheduledPosts[0]?.accountHandle || '@glowluxe.official'}
-                brandName={project.inputData.productAnalysis?.brandName || 'GlowLuxe Official'}
-              />
-
-              {/* Dynamic Stickers & Flash Sale Countdown Overlay */}
-              <DynamicStickersOverlay
-                stickers={project.dynamicStickers || []}
-                activeScene={activeScene}
-                currentTime={currentTime}
-              />
-
-              {/* Top Layer: Scene Badge & BGM pill */}
-              <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none z-20">
-                <span className="text-[10px] font-bold uppercase px-2.5 py-1 bg-black/70 backdrop-blur-md text-amber-300 rounded-lg border border-amber-500/30 shadow-md">
-                  Scene #{activeScene?.sceneNumber}: {activeScene?.sceneType}
-                </span>
-
-                <span className="text-[10px] font-medium px-2 py-1 bg-black/70 backdrop-blur-md text-slate-200 rounded-lg border border-slate-700 flex items-center gap-1">
-                  <Music className="w-2.5 h-2.5 text-indigo-400" />
-                  <span className="truncate max-w-[90px]">{project.selectedBgm.title}</span>
-                </span>
-              </div>
-
-              {/* Digital Avatar PiP (Corner Overlay with Live Talking Animation) */}
-              <div className="absolute bottom-24 right-3 w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-indigo-500 shadow-2xl bg-slate-950 z-20">
-                <img
-                  src={project.selectedAvatar.avatarImage}
-                  alt={project.selectedAvatar.name}
-                  className={`w-full h-full object-cover ${isPlaying ? 'scale-105 transition duration-300' : ''}`}
-                  referrerPolicy="no-referrer"
-                />
-                {isPlaying && (
-                  <div className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-black animate-pulse" />
-                )}
-                <div className="absolute bottom-0 inset-x-0 bg-black/80 py-0.5 text-[8px] text-center font-bold text-slate-200 truncate px-1">
-                  {project.selectedAvatar.name.split(' ')[0]} (AI Host)
-                </div>
-              </div>
-
-              {/* Kinetic Animated Captions (Word-by-word active karaoke) */}
-              <KineticCaptionsOverlay
-                scene={activeScene}
-                currentTime={currentTime}
-                sceneStartTime={getSceneStartTime(currentSceneIndex)}
-                captionStyle={project.captionStyle}
-              />
-
-              {/* TikTok Yellow Cart Anchor CTA (When in CTA scene or bottom left) */}
-              {activeScene?.sceneType === 'cta' && (
-                <div className="absolute bottom-4 left-3 right-3 bg-amber-400 text-slate-950 font-black text-xs px-3.5 py-2.5 rounded-2xl shadow-2xl flex items-center justify-between animate-bounce z-20 border border-amber-300">
-                  <div className="flex items-center gap-1.5 truncate">
-                    <span className="text-base">🛍️</span>
-                    <span className="truncate">Keranjang Kuning: Diskon 45%</span>
-                  </div>
-                  <span className="text-[10px] bg-slate-950 text-white px-2.5 py-1 rounded-xl shrink-0 font-bold">
-                    Beli Sekarang
-                  </span>
-                </div>
-              )}
-
-              {/* Center Play/Pause Overlay Indicator on click */}
-              <button
-                onClick={() => setIsPlaying(!isPlaying)}
-                className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/40 transition group"
-              >
-                {!isPlaying && (
-                  <div className="w-14 h-14 rounded-full bg-indigo-600/90 text-white flex items-center justify-center shadow-2xl group-hover:scale-110 transition">
-                    <Play className="w-6 h-6 fill-white ml-1" />
-                  </div>
-                )}
-              </button>
-            </div>
-
-            {/* Timeline Controls & Scrubber */}
-            <div className="space-y-2 pt-1">
-              <div className="flex items-center justify-between text-xs text-slate-500 font-mono">
-                <span>{currentTime.toFixed(1)}s</span>
-                <span className="text-slate-400">/</span>
-                <span>{totalDuration.toFixed(1)}s</span>
-              </div>
-
-              {/* Scrubber Range */}
-              <input
-                type="range"
-                min="0"
-                max={totalDuration}
-                step="0.1"
-                value={currentTime}
-                onChange={(e) => setCurrentTime(parseFloat(e.target.value))}
-                className="w-full accent-indigo-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
-              />
-
-              {/* Playback Buttons */}
-              <div className="flex items-center justify-between pt-1">
-                <button
-                  onClick={() => setCurrentTime(0)}
-                  className="p-2 text-slate-500 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 transition"
-                  title="Reset ke Awal"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                </button>
-
-                <button
-                  onClick={() => setIsPlaying(!isPlaying)}
-                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl flex items-center gap-2 shadow-xs transition active:scale-95"
-                >
-                  {isPlaying ? (
-                    <>
-                      <Pause className="w-4 h-4" />
-                      <span>Pause</span>
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-4 h-4 fill-white" />
-                      <span>Play Preview</span>
-                    </>
-                  )}
-                </button>
-
-                <span className="text-[11px] font-semibold text-slate-600 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
-                  Scene {currentSceneIndex + 1} of {project.storyboard.length}
-                </span>
-              </div>
-            </div>
-
-          </div>
+        {/* Left Column: Dedicated Video Preview Player Component (5 cols) */}
+        <div className="lg:col-span-5 space-y-4 lg:sticky lg:top-20 z-20">
+          <VideoPreviewPlayer
+            project={project}
+            activeSceneIndex={currentSceneIndex}
+            onSelectScene={setCurrentSceneIndex}
+            onOpenBrandSettings={onOpenBrandSettings}
+          />
         </div>
 
         {/* Right Column: Refining Tool Modules (7 cols) */}

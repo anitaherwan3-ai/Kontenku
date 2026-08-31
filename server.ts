@@ -113,6 +113,63 @@ async function executeGeminiWithFallback<T>(options: GeminiCallOptions<T>): Prom
   return fallbackData;
 }
 
+// Helper to safely extract keywords and metadata from URL
+function extractKeywordsFromUrl(rawUrl?: string): { hostname: string; slugKeywords: string; cleanUrl: string } {
+  if (!rawUrl) return { hostname: "Marketplace", slugKeywords: "", cleanUrl: "" };
+  try {
+    const formatted = rawUrl.startsWith("http://") || rawUrl.startsWith("https://") ? rawUrl : `https://${rawUrl}`;
+    const parsed = new URL(formatted);
+    const hostname = parsed.hostname.replace(/^www\./, "");
+    
+    // Extract readable words from path slug (e.g., /skintific-5x-ceramide-gel-i.123 -> "skintific 5x ceramide gel")
+    const pathParts = parsed.pathname.split("/").filter(Boolean);
+    const slugCandidates = pathParts
+      .map(p => decodeURIComponent(p).replace(/[-_+=]+/g, " ").replace(/\b(i|p|dp|item|product|goods|itm)\.\d+.*$/i, "").trim())
+      .filter(p => p.length > 2 && !/^\d+$/.test(p));
+    
+    const slugKeywords = slugCandidates.join(" ");
+    return { hostname, slugKeywords, cleanUrl: formatted };
+  } catch {
+    return { hostname: "Marketplace", slugKeywords: rawUrl.replace(/[-_+=/]+/g, " ").slice(0, 80), cleanUrl: rawUrl };
+  }
+}
+
+// Helper to safely fetch basic OpenGraph/Meta tags with short timeout
+async function fetchPageMetadata(targetUrl: string): Promise<{ title?: string; description?: string; brand?: string }> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s fast timeout
+
+    const response = await fetch(targetUrl, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "id,en-US;q=0.9,en;q=0.8",
+      },
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) return {};
+    const html = await response.text();
+
+    // Extract title
+    const ogTitleMatch = html.match(/<meta\s+property=["']og:title["']\s+content=["'](.*?)["']/i) ||
+                         html.match(/<meta\s+name=["']twitter:title["']\s+content=["'](.*?)["']/i) ||
+                         html.match(/<title[^>]*>(.*?)<\/title>/i);
+    const title = ogTitleMatch ? ogTitleMatch[1].replace(/&#?[a-z0-9]+;/gi, " ").trim() : undefined;
+
+    // Extract description
+    const ogDescMatch = html.match(/<meta\s+property=["']og:description["']\s+content=["'](.*?)["']/i) ||
+                        html.match(/<meta\s+name=["']description["']\s+content=["'](.*?)["']/i);
+    const description = ogDescMatch ? ogDescMatch[1].replace(/&#?[a-z0-9]+;/gi, " ").slice(0, 300).trim() : undefined;
+
+    return { title, description };
+  } catch {
+    return {};
+  }
+}
+
 // 1. Health check
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -123,42 +180,63 @@ app.post("/api/analyze-product", async (req, res) => {
   try {
     const { url, promptConcept, productText } = req.body;
 
-    const systemPrompt = `You are Pippit AI's intelligent Product Dissector for e-commerce video ads (TikTok Shop, Shopee, Tokopedia, Instagram Reels).
-Analyze the given product URL or description and extract rich e-commerce marketing intelligence.
+    const { hostname, slugKeywords, cleanUrl } = extractKeywordsFromUrl(url);
+
+    // If a valid URL is provided, try fast metadata scraper
+    let scrapedTitle = "";
+    let scrapedDesc = "";
+    if (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://")) {
+      const meta = await fetchPageMetadata(cleanUrl);
+      if (meta.title) scrapedTitle = meta.title;
+      if (meta.description) scrapedDesc = meta.description;
+    }
+
+    const systemPrompt = `You are Pippit AI's intelligent E-Commerce Product Dissector and Ads Strategist for viral short video ads (TikTok Shop, Shopee Video, Instagram Reels, Tokopedia).
+Analyze the given product URL, scraped metadata, and slug keywords to deduce product details, target audience, price estimates, USPs, and viral video hooks.
 Always return valid JSON adhering strictly to the schema provided.`;
 
-    const userPrompt = `Analyze this product for video ad creation:
-URL: ${url || "N/A"}
-Prompt/Concept: ${promptConcept || "N/A"}
+    const userPrompt = `Analyze this product link / concept for video ad creation:
+Target URL: ${url || "N/A"}
+Domain Host: ${hostname}
+URL Path & Keywords: ${slugKeywords || "N/A"}
+Scraped Page Title: ${scrapedTitle || "N/A"}
+Scraped Page Description: ${scrapedDesc || "N/A"}
+User Prompt/Concept: ${promptConcept || "N/A"}
 Raw Text / Specs: ${productText || "N/A"}
 
-Extract:
-1. productName (Descriptive, catchy)
-2. category (e.g. Skincare & Beauty, Fashion, Tech Gadgets, F&B, Home Living)
-3. brandName
-4. pricePoint (Realistic price or extracted with promo)
-5. targetAudience (Demographics, desires, pain points)
+Extract marketing intelligence:
+1. productName (Descriptive, catchy Indonesian/English e-commerce product name)
+2. category (e.g. Skincare & Beauty, Fashion, Tech Gadgets, F&B, Home Living, Mother & Baby)
+3. brandName (Extract from title, domain, or slug)
+4. pricePoint (Realistic price estimate or promo, e.g., 'Rp 89.000 (Flash Sale Disc 40%)')
+5. targetAudience (Demographics, desires, pain points in Indonesian)
 6. uniqueSellingPoints (Array of 3-4 strong USPs)
 7. painPointsSolved (Array of 2-3 customer problems solved)
-8. recommendedHook (Viral 3-second hook text tailored for TikTok/Reels)
-9. toneOfVoice (e.g. Excited UGC, Aesthetic Minimalist, Shocking Experiment, Luxury Review)
+8. recommendedHook (Viral 3-second hook text tailored for TikTok/Reels in Indonesian)
+9. toneOfVoice (e.g. Excited UGC, Aesthetic Minimalist, Shocking Experiment, Honest Review)
 10. visualAesthetic (Lighting, scene suggestions, camera cues)
 11. confidenceScore (integer 90-99)`;
 
+    const derivedProductName = scrapedTitle
+      ? scrapedTitle.replace(/\s*\|\s*(Shopee|Tokopedia|TikTok|Lazada).*$/i, "").slice(0, 60)
+      : slugKeywords
+      ? slugKeywords.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).slice(0, 6).join(" ")
+      : "Produk Unggulan E-Commerce";
+
     const fallbackData = {
-      productName: url ? `Smart Product from ${new URL(url).hostname}` : "Custom E-Commerce Product",
+      productName: derivedProductName || `Smart Product (${hostname})`,
       category: "General Merchandise & Lifestyle",
-      brandName: "Pippit Store",
+      brandName: hostname !== "Marketplace" ? hostname.split(".")[0].toUpperCase() : "Pippit Brand Official",
       pricePoint: "Rp 99.000 (Flash Sale Disc 30%)",
-      targetAudience: "Gen Z & Millennials 18-35 tahun pencari produk viral dan fungsional",
+      targetAudience: "Gen Z & Millennials 18-35 tahun pencari produk viral, praktis, dan bergaransi resmi",
       uniqueSellingPoints: [
-        "Kualitas material premium dengan garansi resmi",
-        "Desain modern ergonomis dan portable",
-        "Terbukti viral dengan ribuan ulasan bintang 5",
+        "Formula dan material premium bersertifikasi resmi",
+        "Desain modern ergonomis, mudah digunakan sehari-hari",
+        "Terbukti viral dengan ribuan ulasan bintang 5 di marketplace",
       ],
       painPointsSolved: [
-        "Sulit menemukan produk terjangkau yang tahan lama",
-        "Repot dengan produk konvensional yang tidak efisien",
+        "Frustrasi dengan produk murah tanpa kualitas yang cepat rusak",
+        "Membutuhkan solusi praktis dan instan untuk kebutuhan harian",
       ],
       recommendedHook: "“Jangan checkout dulu sebelum liat rahasia produk viral yang satu ini!”",
       toneOfVoice: "Excited UGC, relatable, to-the-point",
@@ -412,6 +490,156 @@ Generate updated JSON with:
   } catch (error: any) {
     console.error("Error in Seedance remix:", error);
     res.status(500).json({ error: error.message || "Failed to remix scene with Seedance" });
+  }
+});
+
+// 4b. AI Magic Refine Storyboard (Uses product analysis data to automatically upgrade hook lines & viral visual prompts)
+app.post("/api/storyboard/magic-refine", async (req, res) => {
+  try {
+    const { scenes, productAnalysis, specificSceneId, focus } = req.body;
+
+    const systemPrompt = `You are Pippit AI's Chief Creative Director for viral short-form video ads on TikTok Shop, Instagram Reels, and YouTube Shorts.
+Your mission is to perform an 'AI Magic Refine' on the video storyboard using product analysis data (USPs, pain points, pricing/promos, target audience).
+Specifically:
+1. For Hook scenes (Scene 1): Upgrade the voiceover and on-screen text with hyper-compelling psychological curiosity triggers, pattern interrupts, and relatable hooks.
+2. For Demo/Body scenes: Sharpen the visual prompts for Seedance AI with cinematic lighting, dynamic camera movements (macro zooms, snap cuts, floating text tags), and crisp UGC authenticity.
+3. For CTA scenes: Make the call to action irresistible with FOMO triggers, discounts, and yellow-cart guidance.
+Always return the refined scenes adhering strictly to the JSON schema.`;
+
+    const userPrompt = `Product Analysis Context:
+- Product Name: ${productAnalysis?.productName || "Produk Unggulan"}
+- Brand: ${productAnalysis?.brandName || "Brand Official"}
+- Category: ${productAnalysis?.category || "E-Commerce"}
+- Price / Promo: ${productAnalysis?.pricePoint || "Diskon Spesial"}
+- Unique Selling Points (USPs): ${JSON.stringify(productAnalysis?.uniqueSellingPoints || [])}
+- Pain Points Solved: ${JSON.stringify(productAnalysis?.painPointsSolved || [])}
+- Target Audience: ${productAnalysis?.targetAudience || "Gen Z & Millennials"}
+- Recommended Hook: ${productAnalysis?.recommendedHook || "N/A"}
+
+Current Storyboard Scenes:
+${JSON.stringify(scenes || [], null, 2)}
+
+Instructions:
+${specificSceneId ? `Only optimize the scene with ID '${specificSceneId}' while keeping others consistent.` : "Refine and elevate all scenes in the storyboard."}
+Focus: ${focus || "all"}
+
+Return JSON with:
+1. scenes: Updated array of scenes with improved voiceoverText, onScreenText, visualPrompt, cameraMovement, and transition.
+2. refineSummary: A brief 1-2 sentence description in Indonesian of what viral enhancements were applied.
+3. viralHooksSuggested: Array of 2-3 alternate punchy viral hook lines for testing.`;
+
+    const fallbackScenes = (scenes || []).map((sc: any, idx: number) => {
+      if (idx === 0 || sc.sceneType === "hook") {
+        return {
+          ...sc,
+          voiceoverText: `Kalian jangan buru-buru checkout sebelum liat rahasia asli ${productAnalysis?.productName || "produk ini"}! Beneran bikin kaget hasilnya!`,
+          onScreenText: `😱 JANGAN BELI DULU SEBELUM LIAT INI! ✨`,
+          visualPrompt: `High-retention UGC vertical video 9:16, host holds ${productAnalysis?.productName || "product"} with astonished expression, dramatic focus snap, bright modern studio lighting, 4K sharp detail`,
+          cameraMovement: "zoom_in",
+          transition: "zoom_blur",
+        };
+      } else if (sc.sceneType === "cta" || idx === (scenes?.length || 1) - 1) {
+        return {
+          ...sc,
+          voiceoverText: `Lagi ada promo ${productAnalysis?.pricePoint || "diskon besar"} khusus hari ini! Langsung tap keranjang kuning sekarang sebelum kupon hangus!`,
+          onScreenText: `👇 KLAIM DISKON SPESIAL DI KERANJANG KUNING!`,
+          visualPrompt: `Pulsing animated Yellow Cart icon on bottom left with floating discount badge, host smiling with upbeat hand pointing gesture, cinematic depth of field`,
+          cameraMovement: "dynamic_shake",
+          transition: "glitch",
+        };
+      } else {
+        return {
+          ...sc,
+          voiceoverText: sc.voiceoverText || `Lihat detail tekstur dan performanya yang premium banget, langsung terbukti saat dipakai.`,
+          onScreenText: sc.onScreenText || `✨ 100% Original & Terbukti Efektif`,
+          visualPrompt: `${sc.visualPrompt || "Product demonstration"} | Cinematic 9:16 macro shot, dynamic floating feature callout badge, high-key studio softbox lighting, ultra smooth framerate`,
+        };
+      }
+    });
+
+    const fallbackData = {
+      scenes: fallbackScenes,
+      refineSummary: `Berhasil meningkatkan retensi hook 3-detik pertama dengan formula curiosity gap, serta menambahkan petunjuk visual sinematik Seedance 4K pada seluruh adegan.`,
+      viralHooksSuggested: [
+        `"Pantesan viral di mana-mana, ternyata rahasia ${productAnalysis?.productName || "produk ini"} beneran gak main-main!"`,
+        `"Stop buang-buang uang beli yang mahal kalau produk ini punya kualitas 2x lipat lebih bagus!"`,
+        `"Buat kalian yang punya masalah ${productAnalysis?.painPointsSolved?.[0] || "ini"}, tonton video ini sampai habis!"`,
+      ],
+    };
+
+    const responseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        scenes: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              sceneNumber: { type: Type.INTEGER },
+              sceneType: { type: Type.STRING },
+              durationSeconds: { type: Type.NUMBER },
+              voiceoverText: { type: Type.STRING },
+              avatarAction: { type: Type.STRING },
+              visualPrompt: { type: Type.STRING },
+              visualUrl: { type: Type.STRING },
+              onScreenText: { type: Type.STRING },
+              cameraMovement: { type: Type.STRING },
+              transition: { type: Type.STRING },
+              bgSoundEffect: { type: Type.STRING },
+            },
+            required: [
+              "sceneNumber",
+              "sceneType",
+              "durationSeconds",
+              "voiceoverText",
+              "avatarAction",
+              "visualPrompt",
+              "onScreenText",
+            ],
+          },
+        },
+        refineSummary: { type: Type.STRING },
+        viralHooksSuggested: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+        },
+      },
+      required: ["scenes", "refineSummary"],
+    };
+
+    const parsed = await executeGeminiWithFallback<{
+      scenes: any[];
+      refineSummary: string;
+      viralHooksSuggested?: string[];
+    }>({
+      systemPrompt,
+      userPrompt,
+      responseSchema,
+      fallbackData,
+    });
+
+    // Ensure scenes have valid IDs & visualUrls
+    const finalScenes = (parsed.scenes || fallbackScenes).map((sc, i) => ({
+      ...sc,
+      id: sc.id || scenes?.[i]?.id || `scene-refined-${Date.now()}-${i}`,
+      visualUrl: sc.visualUrl || scenes?.[i]?.visualUrl || "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=800&auto=format&fit=crop&q=80",
+      cameraMovement: sc.cameraMovement || scenes?.[i]?.cameraMovement || "zoom_in",
+      transition: sc.transition || scenes?.[i]?.transition || "cut",
+      bgSoundEffect: sc.bgSoundEffect || scenes?.[i]?.bgSoundEffect || "Pop",
+    }));
+
+    return res.json({
+      success: true,
+      data: {
+        scenes: finalScenes,
+        refineSummary: parsed.refineSummary || fallbackData.refineSummary,
+        viralHooksSuggested: parsed.viralHooksSuggested || fallbackData.viralHooksSuggested,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error in AI Magic Refine:", error);
+    res.status(500).json({ error: error.message || "Failed to refine storyboard" });
   }
 });
 
@@ -1363,6 +1591,186 @@ Rewrite each scene's voiceoverText and onScreenText so they naturally incorporat
   } catch (error: any) {
     console.error("Error optimizing script SEO:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// 15. AI 3-Act Script Generator (Hook, Demo, CTA)
+app.post("/api/generate-3act-script", async (req, res) => {
+  try {
+    const {
+      productTitle = "Produk E-Commerce",
+      category = "General",
+      brandName = "Brand Official",
+      keywords = [],
+      usps = [],
+      painPoints = [],
+      tone = "excited_ugc",
+      duration = "15s",
+      adGoal = "conversion",
+      language = "id",
+      strategyAngle = "viral_problem_solution",
+    } = req.body;
+
+    const systemPrompt = `You are Pippit AI's viral e-commerce TikTok & Instagram Reels 3-Act Scriptwriting Specialist.
+Your mission is to construct an irresistible, high-converting 3-Act video ad script (Babak 1: The Hook, Babak 2: The Demo & Problem Solution, Babak 3: The CTA & Urgency Offer) based on user product keywords and marketing intelligence.
+Target duration is typically 15-30s.
+
+Structure of 3 Acts:
+- Act 1 (Hook, 0-3s): Stopping power, immediate visual disruption, curiosity gap or visceral customer frustration callout, incorporating key search terms.
+- Act 2 (Demo, 3-12s): Showcasing the product in action, macro texture/spec demonstration, solving the core pain point with key USP proof.
+- Act 3 (CTA, 12-15s): Urgency flash sale discount offer, direct command to tap yellow cart (keranjang kuning) / link in bio with guarantee.
+
+Return structured JSON according to the schema.`;
+
+    const userPrompt = `Product: ${productTitle}
+Category: ${category}
+Brand: ${brandName}
+Keywords to incorporate: ${JSON.stringify(keywords)}
+USPs: ${JSON.stringify(usps)}
+Pain Points: ${JSON.stringify(painPoints)}
+Tone of Voice: ${tone}
+Duration: ${duration}
+Strategy Angle: ${strategyAngle}
+Ad Goal: ${adGoal}
+Language: ${language}
+
+Generate a complete 3-Act script data object.`;
+
+    const fallback3Act = {
+      scriptTitle: `Naskah 3-Babak Viral: ${productTitle}`,
+      overallConcept: `Formula 3-Babak konversi tinggi dengan Hook kontras, Demo visual sensorial ${keywords[0] || "USP produk"}, dan penutupan CTA diskon flash sale.`,
+      targetHookAngle: strategyAngle === "price_shock" ? "Price Shock & Flash Promo" : "Curiosity & Problem-Solution Hook",
+      targetPacing: "Fast-paced & High Retention (TikTok/Reels Optimized)",
+      estimatedWatchTime: "15.0s (Target Completion: 52%)",
+      acts: [
+        {
+          actNumber: 1,
+          actType: "hook",
+          actTitle: "Babak 1: The Viral Hook (0-3s)",
+          durationSeconds: 3,
+          voiceoverText: `Kalian jangan checkout dulu sebelum liat rahasia dari ${productTitle}! ${keywords[0] ? `Beneran ada ${keywords[0]} semurah ini!` : "Solusi viral yang wajib kalian punya!"}`,
+          onScreenText: `😱 JANGAN BELI DULU SEBELUM LIAT INI!`,
+          avatarAction: "Ekspresi kaget sambil menunjuk ke kamera lalu mengangkat produk dengan percaya diri",
+          visualPrompt: `Close-up UGC host holding ${productTitle} with shocked expression, high engagement ring light, viral TikTok aesthetic 9:16 vertical view`,
+          cameraMovement: "zoom_in",
+          transition: "zoom_blur",
+          bgSoundEffect: "Whoosh + Record Scratch",
+          psychologicalAngle: "Curiosity Gap & Fear of Missing Out (FOMO)",
+          keywordsUsed: keywords.slice(0, 2),
+          visualUrl: "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=800&auto=format&fit=crop&q=80",
+        },
+        {
+          actNumber: 2,
+          actType: "demo",
+          actTitle: "Babak 2: The Demo & Problem Solution (3-12s)",
+          durationSeconds: 8,
+          voiceoverText: `Liat sendiri kualitasnya! ${usps[0] || "Formula premium yang beneran ampuh dan aman dipakai"}. ${keywords[1] ? `Dilengkapi ${keywords[1]} yang bikin hasilnya maksimal.` : "Beda banget sama produk abal-abal di pasaran."}`,
+          onScreenText: `✨ ${usps[0] || "Kualitas Premium & 100% Original"}`,
+          avatarAction: "Menunjukkan cara pemakaian produk secara mendetail dengan ekspresi puas",
+          visualPrompt: `Ultra macro slow-motion shot: demonstrating ${productTitle} in pristine studio lighting, crisp texture detail, 9:16 portrait`,
+          cameraMovement: "pan_right",
+          transition: "cut",
+          bgSoundEffect: "Sensory ASMR Thock",
+          psychologicalAngle: "Visual Proof & Visceral Pain Relief",
+          keywordsUsed: keywords.slice(1, 3),
+          visualUrl: "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=800&auto=format&fit=crop&q=80",
+        },
+        {
+          actNumber: 3,
+          actType: "cta",
+          actTitle: "Babak 3: The Urgency CTA & Yellow Cart (12-15s)",
+          durationSeconds: 4,
+          voiceoverText: `Mumpung lagi ada promo voucher diskon kilat plus gratis ongkir, langsung tap keranjang kuning di kiri bawah sekarang sebelum kehabisan!`,
+          onScreenText: `👇 KLIK KERANJANG KUNING (PROMO FLASH SALE)`,
+          avatarAction: "Menunjuk ke arah keranjang kuning di sudut kiri bawah sambil tersenyum ramah",
+          visualPrompt: `TikTok Yellow Cart pulsing graphic overlay with countdown timer badge and flash sale ribbon`,
+          cameraMovement: "dynamic_shake",
+          transition: "glitch",
+          bgSoundEffect: "Cash Register Cha-Ching",
+          psychologicalAngle: "Direct Command & Scarcity Urgency",
+          keywordsUsed: ["keranjang kuning", "flash sale", "gratis ongkir"],
+          visualUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800&auto=format&fit=crop&q=80",
+        },
+      ],
+    };
+
+    const responseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        scriptTitle: { type: Type.STRING },
+        overallConcept: { type: Type.STRING },
+        targetHookAngle: { type: Type.STRING },
+        targetPacing: { type: Type.STRING },
+        estimatedWatchTime: { type: Type.STRING },
+        acts: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              actNumber: { type: Type.INTEGER },
+              actType: { type: Type.STRING, description: "hook | demo | cta" },
+              actTitle: { type: Type.STRING },
+              durationSeconds: { type: Type.NUMBER },
+              voiceoverText: { type: Type.STRING },
+              onScreenText: { type: Type.STRING },
+              avatarAction: { type: Type.STRING },
+              visualPrompt: { type: Type.STRING },
+              cameraMovement: { type: Type.STRING, description: "zoom_in | pan_right | static | dynamic_shake | orbit" },
+              transition: { type: Type.STRING, description: "zoom_blur | cut | glitch | fade | swipe_left" },
+              bgSoundEffect: { type: Type.STRING },
+              psychologicalAngle: { type: Type.STRING },
+              keywordsUsed: { type: Type.ARRAY, items: { type: Type.STRING } },
+            },
+            required: [
+              "actNumber",
+              "actType",
+              "actTitle",
+              "durationSeconds",
+              "voiceoverText",
+              "onScreenText",
+              "avatarAction",
+              "visualPrompt",
+              "cameraMovement",
+              "transition",
+              "bgSoundEffect",
+              "psychologicalAngle",
+              "keywordsUsed",
+            ],
+          },
+        },
+      },
+      required: ["scriptTitle", "overallConcept", "targetHookAngle", "targetPacing", "estimatedWatchTime", "acts"],
+    };
+
+    const parsed = await executeGeminiWithFallback<typeof fallback3Act>({
+      systemPrompt,
+      userPrompt,
+      responseSchema,
+      fallbackData: fallback3Act,
+    });
+
+    // Augment visual URLs if missing
+    const defaultVisuals = [
+      "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=800&auto=format&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=800&auto=format&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800&auto=format&fit=crop&q=80",
+    ];
+
+    const augmentedActs = (parsed.acts || fallback3Act.acts).map((act, idx) => ({
+      ...act,
+      visualUrl: act.visualUrl || defaultVisuals[idx % defaultVisuals.length],
+    }));
+
+    return res.json({
+      success: true,
+      data: {
+        ...parsed,
+        acts: augmentedActs,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error generating 3-act script:", error);
+    res.status(500).json({ error: error.message || "Failed to generate 3-act script" });
   }
 });
 

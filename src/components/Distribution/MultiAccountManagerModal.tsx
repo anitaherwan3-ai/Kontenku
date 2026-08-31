@@ -163,7 +163,7 @@ export const MultiAccountManagerModal: React.FC<MultiAccountManagerModalProps> =
         {/* Action Toolbar: Filter Tabs & Add Button */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           {/* Filter tabs */}
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl">
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl overflow-x-auto">
             {[
               { id: 'all', label: `Semua (${accounts.length})` },
               { id: 'tiktok', label: `🎵 TikTok (${accounts.filter((a) => a.platform === 'tiktok').length})` },
@@ -173,7 +173,7 @@ export const MultiAccountManagerModal: React.FC<MultiAccountManagerModalProps> =
               <button
                 key={tab.id}
                 onClick={() => setFilterPlatform(tab.id as any)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
                   filterPlatform === tab.id
                     ? 'bg-white text-indigo-700 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -184,14 +184,100 @@ export const MultiAccountManagerModal: React.FC<MultiAccountManagerModalProps> =
             ))}
           </div>
 
-          <button
-            onClick={() => setIsAddingAccount(!isAddingAccount)}
-            className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-xs transition active:scale-95"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>{isAddingAccount ? 'Batal Tambah' : 'Tautkan Akun Baru'}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsAddingAccount(true)}
+              className="flex items-center justify-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-bold shadow-xs transition active:scale-95"
+            >
+              <ShieldCheck className="w-4 h-4 text-emerald-100" />
+              <span>+ Hubungkan Akun Real</span>
+            </button>
+          </div>
         </div>
+
+        {/* Quick OAuth Connect Real Account Cards */}
+        {!isAddingAccount && (
+          <div className="p-4 bg-gradient-to-br from-slate-900 to-indigo-950 rounded-2xl border border-indigo-900/60 text-white space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <span className="text-xs font-bold text-white tracking-wide">
+                  1-Klik Otorisasi Akun Real (OAuth 2.0)
+                </span>
+              </div>
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold">
+                Izin Resmi & Aman
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-300">
+              Pilih platform media sosial asli Anda untuk mengotorisasi izin auto-upload video, penulisan takarir, dan penandaan keranjang belanja:
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setNewPlatform('tiktok');
+                  setNewName('Toko TikTok Resmi');
+                  setNewHandle('@tokoku.official');
+                  setIsAddingAccount(true);
+                }}
+                className="p-2.5 bg-white/10 hover:bg-white/20 border border-white/15 rounded-xl text-left transition flex items-center gap-2.5 group"
+              >
+                <div className="w-8 h-8 rounded-lg bg-black flex items-center justify-center text-sm font-bold shadow-xs">
+                  🎵
+                </div>
+                <div className="overflow-hidden">
+                  <div className="text-xs font-bold text-white group-hover:text-amber-300 transition truncate">
+                    TikTok Shop / Creator
+                  </div>
+                  <div className="text-[10px] text-slate-400">Hubungkan via TikTok API</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setNewPlatform('instagram');
+                  setNewName('Instagram Business Shop');
+                  setNewHandle('@tokoku.id');
+                  setIsAddingAccount(true);
+                }}
+                className="p-2.5 bg-white/10 hover:bg-white/20 border border-white/15 rounded-xl text-left transition flex items-center gap-2.5 group"
+              >
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-yellow-500 via-pink-500 to-purple-600 flex items-center justify-center text-sm font-bold shadow-xs">
+                  📸
+                </div>
+                <div className="overflow-hidden">
+                  <div className="text-xs font-bold text-white group-hover:text-pink-300 transition truncate">
+                    Instagram Reels & Shop
+                  </div>
+                  <div className="text-[10px] text-slate-400">Hubungkan via Meta Graph</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setNewPlatform('facebook');
+                  setNewName('Facebook Business Page');
+                  setNewHandle('TokoKu Fanpage Official');
+                  setIsAddingAccount(true);
+                }}
+                className="p-2.5 bg-white/10 hover:bg-white/20 border border-white/15 rounded-xl text-left transition flex items-center gap-2.5 group"
+              >
+                <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-sm font-bold shadow-xs">
+                  👥
+                </div>
+                <div className="overflow-hidden">
+                  <div className="text-xs font-bold text-white group-hover:text-blue-300 transition truncate">
+                    Facebook Page & Ads
+                  </div>
+                  <div className="text-[10px] text-slate-400">Hubungkan via Meta Marketing</div>
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* FORM: Add New Account Wizard (Collapsible) */}
         {isAddingAccount && (

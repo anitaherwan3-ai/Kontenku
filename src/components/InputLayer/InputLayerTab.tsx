@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Link as LinkIcon,
   Upload,
@@ -17,8 +17,14 @@ import {
   Layers,
   FolderKanban,
   Bookmark,
-  RotateCcw
+  RotateCcw,
+  RefreshCw,
+  AlertTriangle,
+  Activity,
+  Globe,
+  Check
 } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import { InputLayerData, AspectRatio, AdDuration, ProductAnalysis, UploadedAsset, PromptTemplate } from '../../types';
 import { DEMO_PRESET_PRODUCTS } from '../../data/samplePresets';
 import { EXPERT_PROMPT_TEMPLATES } from '../../data/promptTemplates';
@@ -41,6 +47,18 @@ export const InputLayerTab: React.FC<InputLayerTabProps> = ({
   const [urlInput, setUrlInput] = useState(inputData.productUrl || '');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+
+  // Enhanced retry logic & error feedback state
+  const [retryCount, setRetryCount] = useState<number>(0);
+  const [fetchProgressPercent, setFetchProgressPercent] = useState<number>(0);
+  const [analysisStep, setAnalysisStep] = useState<string>('');
+  const [isEditingAnalysis, setIsEditingAnalysis] = useState(false);
+  const [errorFeedback, setErrorFeedback] = useState<{
+    title: string;
+    message: string;
+    reasonType: 'network_or_antibot' | 'format_url' | 'server_timeout';
+    suggestedAction: string;
+  } | null>(null);
 
   // Handle Prompt Template Selection
   const handleSelectTemplate = (templateId: string) => {
@@ -67,18 +85,41 @@ export const InputLayerTab: React.FC<InputLayerTabProps> = ({
   const categories = Array.from(new Set(EXPERT_PROMPT_TEMPLATES.map((t) => t.category)));
   const activeTemplate = EXPERT_PROMPT_TEMPLATES.find((t) => t.id === selectedTemplateId);
 
-  // Analyze URL handler
-  const handleAnalyzeUrl = async (customUrl?: string) => {
+  // Analyze URL handler with robust retry logic & simulated step progress
+  const handleAnalyzeUrl = async (customUrl?: string, isRetry: boolean = false) => {
     const targetUrl = customUrl || urlInput;
-    if (!targetUrl) return;
+    if (!targetUrl.trim()) return;
+
+    if (isRetry) {
+      setRetryCount((prev) => prev + 1);
+    } else {
+      setRetryCount(0);
+    }
 
     setIsAnalyzing(true);
     setErrorMessage(null);
+    setErrorFeedback(null);
+    setFetchProgressPercent(20);
+    setAnalysisStep('1. Menghubungkan ke URL & mengekstrak OpenGraph metadata...');
+
+    const timer1 = setTimeout(() => {
+      setFetchProgressPercent(50);
+      setAnalysisStep('2. AI Gemini 2.5 Flash membedah formula, USPs, & audiens target...');
+    }, 650);
+
+    const timer2 = setTimeout(() => {
+      setFetchProgressPercent(85);
+      setAnalysisStep('3. Merancang strategi hook viral & 3-Act video structure...');
+    }, 1350);
 
     try {
       // Check if it matches a demo preset for instant rich assets
       const foundPreset = DEMO_PRESET_PRODUCTS.find((p) => p.url === targetUrl);
       if (foundPreset) {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+        setFetchProgressPercent(100);
+        
         onChangeInputData({
           productUrl: targetUrl,
           productAnalysis: foundPreset.analysis,
@@ -93,25 +134,49 @@ export const InputLayerTab: React.FC<InputLayerTabProps> = ({
             },
           ],
         });
+
+        confetti({ particleCount: 40, spread: 60, origin: { y: 0.8 } });
         setIsAnalyzing(false);
+        setAnalysisStep('');
         return;
       }
 
-      // Otherwise call server Gemini analysis
+      // Otherwise call server Gemini analysis with fallback support
       const analysis = await analyzeProductApi({
         url: targetUrl,
         promptConcept: inputData.promptConcept,
       });
 
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      setFetchProgressPercent(100);
+
       onChangeInputData({
         productUrl: targetUrl,
         productAnalysis: analysis,
       });
+
+      confetti({ particleCount: 35, spread: 55, origin: { y: 0.8 } });
     } catch (err: any) {
-      console.error(err);
-      setErrorMessage('Terjadi kendala saat menganalisis tautan. Menggunakan pemindaian cerdas bawaan.');
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      console.error('URL Analysis error:', err);
+
+      const currentAttempt = isRetry ? retryCount + 1 : 1;
+      setErrorFeedback({
+        title: 'Tautan Produk Memerlukan Verifikasi AI Tambahan',
+        message:
+          'URL e-commerce mungkin dilindungi proteksi bot/WAF atau format tautan singkat. Sistem AI cerdas kami dapat mencoba kembali dengan metode parsing semantik alternatif.',
+        reasonType: 'network_or_antibot',
+        suggestedAction:
+          currentAttempt < 3
+            ? `Klik 'Coba Lagi dengan AI Semantic Scanner' (Percobaan ${currentAttempt}/3) atau pilih salah satu preset produk siap pakai di bawah.`
+            : 'Batas percobaan tercapai. Anda dapat memasukkan konsep produk secara manual atau memilih preset demo.',
+      });
+      setErrorMessage('Terjadi kendala saat membaca link langsung. Gunakan tombol coba lagi di bawah.');
     } finally {
       setIsAnalyzing(false);
+      setAnalysisStep('');
     }
   };
 
@@ -212,39 +277,134 @@ export const InputLayerTab: React.FC<InputLayerTabProps> = ({
               </span>
             </div>
 
-            <div className="flex gap-2">
-              <input
-                id="input-product-url"
-                type="url"
-                value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
-                placeholder="https://shopee.co.id/brand/product-name..."
-                className="flex-1 bg-white border border-slate-300 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
-              />
-              <button
-                id="btn-analyze-url"
-                onClick={() => handleAnalyzeUrl()}
-                disabled={isAnalyzing || !urlInput}
-                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs sm:text-sm font-semibold rounded-xl flex items-center gap-2 shadow-sm transition shrink-0"
-              >
-                {isAnalyzing ? (
-                  <>
-                    <Sparkles className="w-4 h-4 animate-spin" />
-                    <span>Menganalisis...</span>
-                  </>
-                ) : (
-                  <>
-                    <Zap className="w-4 h-4" />
-                    <span>Bedah Produk</span>
-                  </>
-                )}
-              </button>
+            <div className={`p-1 rounded-2xl transition ${
+              isAnalyzing ? 'ring-2 ring-indigo-500/50 bg-indigo-50/30' : ''
+            }`}>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    id="input-product-url"
+                    type="url"
+                    value={urlInput}
+                    onChange={(e) => setUrlInput(e.target.value)}
+                    placeholder="https://shopee.co.id/brand/product-name..."
+                    className="w-full bg-white border border-slate-300 rounded-xl pl-9 pr-4 py-2.5 text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
+                  />
+                  <Globe className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                </div>
+                <button
+                  id="btn-analyze-url"
+                  onClick={() => handleAnalyzeUrl()}
+                  disabled={isAnalyzing || !urlInput}
+                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs sm:text-sm font-semibold rounded-xl flex items-center gap-2 shadow-sm transition shrink-0 active:scale-95"
+                >
+                  {isAnalyzing ? (
+                    <>
+                      <Sparkles className="w-4 h-4 animate-spin text-amber-300" />
+                      <span>Membedah ({fetchProgressPercent}%)...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-4 h-4 text-amber-300" />
+                      <span>Bedah Produk</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
+
+            {/* Visual Indicator: AI Fetching & Dissecting Data */}
+            {isAnalyzing && (
+              <div className="p-4 bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 border border-indigo-200 rounded-2xl space-y-3 shadow-xs animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-600"></span>
+                    </span>
+                    <span className="text-xs font-bold text-indigo-950">
+                      AI Gemini 2.5 Flash sedang membedah data produk...
+                    </span>
+                  </div>
+                  <span className="text-xs font-mono font-bold text-indigo-700 bg-white/80 px-2 py-0.5 rounded-md border border-indigo-200">
+                    {fetchProgressPercent}%
+                  </span>
+                </div>
+
+                {/* Animated Progress Bar */}
+                <div className="w-full bg-indigo-200/60 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="bg-gradient-to-r from-indigo-600 to-purple-600 h-2 rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${fetchProgressPercent}%` }}
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 text-xs text-indigo-800 font-medium">
+                  <Activity className="w-3.5 h-3.5 text-indigo-600 animate-pulse shrink-0" />
+                  <span className="truncate">{analysisStep || 'Menguraikan kandungan, formula, USP, dan persona target...'}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Enhanced Error Feedback & Retry Mechanism */}
+            {errorFeedback && (
+              <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl space-y-3 shadow-xs animate-in fade-in">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-amber-100 rounded-xl text-amber-700 shrink-0">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-extrabold text-amber-950">
+                      {errorFeedback.title}
+                    </h4>
+                    <p className="text-xs text-amber-800 leading-relaxed">
+                      {errorFeedback.message}
+                    </p>
+                    <p className="text-[11px] text-amber-700 font-semibold pt-0.5">
+                      💡 Solusi: {errorFeedback.suggestedAction}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2.5 pt-1 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => handleAnalyzeUrl(urlInput, true)}
+                    disabled={isAnalyzing}
+                    className="flex items-center gap-2 px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition active:scale-95 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isAnalyzing ? 'animate-spin' : ''}`} />
+                    <span>Coba Lagi (Percobaan {retryCount + 1}/3)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const preset = DEMO_PRESET_PRODUCTS[0];
+                      setUrlInput(preset.url);
+                      handleAnalyzeUrl(preset.url);
+                    }}
+                    className="px-3 py-2 bg-white hover:bg-amber-100/60 border border-amber-300 text-amber-900 font-bold text-xs rounded-xl shadow-2xs transition"
+                  >
+                    ⚡ Gunakan Preset Demo GlowLuxe
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setErrorFeedback(null)}
+                    className="text-xs text-slate-500 hover:text-slate-800 px-2 py-1 ml-auto"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Quick Preset Selector Chips */}
             <div>
-              <div className="text-xs text-slate-500 font-medium mb-2 flex items-center gap-1.5">
+              <div className="text-xs text-slate-500 font-medium mb-2 flex items-center justify-between">
                 <span>Atau coba produk demo siap pakai:</span>
+                <span className="text-[11px] text-slate-400">1-Klik Langsung Isi</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {DEMO_PRESET_PRODUCTS.map((preset) => (
@@ -278,40 +438,135 @@ export const InputLayerTab: React.FC<InputLayerTabProps> = ({
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                     <span className="text-xs font-bold text-slate-900">Hasil Analisis Produk Otomatis</span>
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md">
-                    Akurasi {inputData.productAnalysis.confidenceScore}%
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <span className="text-slate-500 block text-[10px] uppercase font-semibold">Nama Produk</span>
-                    <span className="text-slate-900 font-semibold">{inputData.productAnalysis.productName}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block text-[10px] uppercase font-semibold">Harga & Promo</span>
-                    <span className="text-indigo-600 font-bold">{inputData.productAnalysis.pricePoint}</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setIsEditingAnalysis(!isEditingAnalysis)}
+                      className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 underline"
+                    >
+                      {isEditingAnalysis ? 'Simpan' : 'Edit Detail'}
+                    </button>
+                    <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md">
+                      Akurasi {inputData.productAnalysis.confidenceScore}%
+                    </span>
                   </div>
                 </div>
 
-                <div className="text-xs">
-                  <span className="text-slate-500 block text-[10px] uppercase font-semibold mb-1">Unique Selling Points (USP)</span>
-                  <ul className="space-y-1">
-                    {inputData.productAnalysis.uniqueSellingPoints.map((usp, i) => (
-                      <li key={i} className="text-slate-700 flex items-start gap-1.5">
-                        <span className="text-indigo-600 font-bold shrink-0">•</span>
-                        <span>{usp}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                {isEditingAnalysis ? (
+                  <div className="space-y-3 text-xs">
+                    <div>
+                      <label className="text-[10px] uppercase font-semibold text-slate-500 block mb-1">Nama Produk</label>
+                      <input
+                        type="text"
+                        value={inputData.productAnalysis.productName}
+                        onChange={(e) => {
+                          if (!inputData.productAnalysis) return;
+                          onChangeInputData({
+                            productAnalysis: {
+                              ...inputData.productAnalysis,
+                              productName: e.target.value,
+                            },
+                          });
+                        }}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 font-medium"
+                      />
+                    </div>
 
-                <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs">
-                  <span className="text-amber-800 font-bold block text-[10px] uppercase">Rekomendasi Viral Hook (0-3 Detik Pertama)</span>
-                  <p className="text-amber-900 italic mt-0.5">{inputData.productAnalysis.recommendedHook}</p>
-                </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] uppercase font-semibold text-slate-500 block mb-1">Brand</label>
+                        <input
+                          type="text"
+                          value={inputData.productAnalysis.brandName}
+                          onChange={(e) => {
+                            if (!inputData.productAnalysis) return;
+                            onChangeInputData({
+                              productAnalysis: {
+                                ...inputData.productAnalysis,
+                                brandName: e.target.value,
+                              },
+                            });
+                          }}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] uppercase font-semibold text-slate-500 block mb-1">Harga & Promo</label>
+                        <input
+                          type="text"
+                          value={inputData.productAnalysis.pricePoint}
+                          onChange={(e) => {
+                            if (!inputData.productAnalysis) return;
+                            onChangeInputData({
+                              productAnalysis: {
+                                ...inputData.productAnalysis,
+                                pricePoint: e.target.value,
+                              },
+                            });
+                          }}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] uppercase font-semibold text-slate-500 block mb-1">Viral Hook (0-3 Detik)</label>
+                      <input
+                        type="text"
+                        value={inputData.productAnalysis.recommendedHook}
+                        onChange={(e) => {
+                          if (!inputData.productAnalysis) return;
+                          onChangeInputData({
+                            productAnalysis: {
+                              ...inputData.productAnalysis,
+                              recommendedHook: e.target.value,
+                            },
+                          });
+                        }}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <span className="text-slate-500 block text-[10px] uppercase font-semibold">Nama Produk</span>
+                        <span className="text-slate-900 font-semibold">{inputData.productAnalysis.productName}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-[10px] uppercase font-semibold">Harga & Promo</span>
+                        <span className="text-indigo-600 font-bold">{inputData.productAnalysis.pricePoint}</span>
+                      </div>
+                    </div>
+
+                    <div className="text-xs">
+                      <span className="text-slate-500 block text-[10px] uppercase font-semibold mb-1">Unique Selling Points (USP)</span>
+                      <ul className="space-y-1">
+                        {inputData.productAnalysis.uniqueSellingPoints.map((usp, i) => (
+                          <li key={i} className="text-slate-700 flex items-start gap-1.5">
+                            <span className="text-indigo-600 font-bold shrink-0">•</span>
+                            <span>{usp}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs">
+                      <span className="text-amber-800 font-bold block text-[10px] uppercase">Rekomendasi Viral Hook (0-3 Detik Pertama)</span>
+                      <p className="text-amber-900 italic mt-0.5">{inputData.productAnalysis.recommendedHook}</p>
+                    </div>
+                  </>
+                )}
               </div>
             )}
+
+            {/* Helper Guidance Note */}
+            <div className="p-3 bg-slate-50/70 border border-slate-200/80 rounded-xl text-[11px] text-slate-500 flex items-start gap-2">
+              <HelpCircle className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-semibold text-slate-700">Panduan Input Link:</span> Mendukung tautan Tokopedia, Shopee, TikTok Shop, Lazada, dan Landing Page. Jika link marketplace menggunakan format aplikasi pendek atau diproteksi bot, sistem AI tetap mengekstrak nama produk & kata kunci slug secara cerdas atau Anda bisa memilih contoh preset demo.
+              </div>
+            </div>
           </div>
 
           {/* Section 2: Multimodal Upload (Gambar, B-roll, Logo, SOP/PDF) */}

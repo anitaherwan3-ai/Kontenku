@@ -396,6 +396,55 @@ export interface ConnectedSocialAccount {
   autoSyncOrders?: boolean;
 }
 
+export interface BrandKitSettings {
+  brandName: string;
+  brandTagline?: string;
+  logoUrl?: string;
+  primaryColor: string; // e.g. '#6366f1' (Indigo)
+  secondaryColor: string; // e.g. '#f59e0b' (Amber/Gold)
+  accentColor: string; // e.g. '#10b981' (Emerald)
+  neutralColor: string; // e.g. '#0f172a' (Slate dark)
+  backgroundColor: string; // e.g. '#ffffff' (White / Clean)
+  fontFamilyHeading: 'Plus Jakarta Sans' | 'Montserrat' | 'Inter' | 'Bebas Neue' | 'Playfair' | 'Impact';
+  fontFamilyBody: 'Plus Jakarta Sans' | 'Montserrat' | 'Inter' | 'Bebas Neue' | 'Playfair' | 'Impact';
+  captionHighlightColor: string;
+  captionTextColor: string;
+  captionBoxColor?: string;
+  watermarkEnabled: boolean;
+  watermarkPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  badgeStyle: 'modern_pill' | 'bold_banner' | 'minimalist' | 'neon_glow';
+  defaultToneOfVoice: string;
+  autoApplyToCaptions: boolean;
+  autoApplyToWatermark: boolean;
+  autoApplyToStickers: boolean;
+}
+
+export interface ThreeActItem {
+  actNumber: number; // 1, 2, 3
+  actType: 'hook' | 'demo' | 'cta';
+  actTitle: string; // e.g. "Babak 1: The Viral Hook (0-3s)"
+  durationSeconds: number;
+  voiceoverText: string;
+  onScreenText: string;
+  avatarAction: string;
+  visualPrompt: string;
+  cameraMovement: 'zoom_in' | 'pan_right' | 'static' | 'dynamic_shake' | 'orbit';
+  transition: 'zoom_blur' | 'cut' | 'glitch' | 'fade' | 'swipe_left';
+  bgSoundEffect: string;
+  psychologicalAngle: string;
+  keywordsUsed: string[];
+  visualUrl?: string;
+}
+
+export interface ThreeActScriptData {
+  scriptTitle: string;
+  overallConcept: string;
+  targetHookAngle: string;
+  targetPacing: string;
+  estimatedWatchTime: string;
+  acts: ThreeActItem[];
+}
+
 export interface PippitProject {
   id: string;
   title: string;
@@ -414,6 +463,8 @@ export interface PippitProject {
   uploadHistory?: UploadHistoryItem[];
   connectedAccounts?: ConnectedSocialAccount[];
   watermarkConfig?: AutoWatermarkConfig;
+  brandKit?: BrandKitSettings;
+  threeActScript?: ThreeActScriptData;
   engagementAlerts?: EngagementMilestoneAlert[];
   dynamicStickers?: DynamicSticker[];
   hookVariants?: HookVariant[];

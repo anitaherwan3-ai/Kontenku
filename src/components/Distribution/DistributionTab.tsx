@@ -39,7 +39,8 @@ import {
   Hash,
   Trophy,
   Flame,
-  Tag
+  Tag,
+  Settings
 } from 'lucide-react';
 import {
   AreaChart,
@@ -63,9 +64,11 @@ import {
   AutoWatermarkConfig,
   EngagementMilestoneAlert
 } from '../../types';
+import { DEFAULT_PIPPIT_PROJECT } from '../../data/samplePresets';
 import { generateSocialCopyApi, fetchAiStrategyInsightsApi } from '../../services/api';
 import { MultiAccountManagerModal } from './MultiAccountManagerModal';
 import { OAuthCredentialsDashboard } from './OAuthCredentialsDashboard';
+import { LiveModeOAuthPanel } from './LiveModeOAuthPanel';
 import { BulkExportModal } from './BulkExportModal';
 import { AdPerformanceChartSection } from './AdPerformanceChartSection';
 import { ContentSchedulingSection } from './ContentSchedulingSection';
@@ -80,12 +83,14 @@ interface DistributionTabProps {
   project: PippitProject;
   onChangeProject: (newProject: Partial<PippitProject>) => void;
   onOpenExportModal: () => void;
+  onOpenSystemSettings?: () => void;
 }
 
 export const DistributionTab: React.FC<DistributionTabProps> = ({
   project,
   onChangeProject,
   onOpenExportModal,
+  onOpenSystemSettings,
 }) => {
   const connectedAccounts: ConnectedSocialAccount[] = project.connectedAccounts || [];
   const scheduledPosts: ScheduledPost[] = project.scheduledPosts || [];
@@ -163,6 +168,54 @@ export const DistributionTab: React.FC<DistributionTabProps> = ({
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>(
     connectedAccounts.length > 0 ? connectedAccounts.map((a) => a.id) : ['acc-tt-1', 'acc-ig-1']
   );
+
+  // Demo vs Live Mode Switcher State
+  const [envMode, setEnvMode] = useState<'demo' | 'live'>('demo');
+  const [demoAccountsBackup, setDemoAccountsBackup] = useState<ConnectedSocialAccount[]>(DEFAULT_PIPPIT_PROJECT.connectedAccounts || []);
+  const [demoPostsBackup, setDemoPostsBackup] = useState<ScheduledPost[]>(DEFAULT_PIPPIT_PROJECT.scheduledPosts || []);
+  const [liveAccounts, setLiveAccounts] = useState<ConnectedSocialAccount[]>([]);
+  const [envSwitchNotice, setEnvSwitchNotice] = useState<string | null>(null);
+
+  // Switch between Demo (Sandbox) and Live (Real OAuth / API)
+  const handleSwitchEnvMode = (newMode: 'demo' | 'live') => {
+    if (newMode === envMode) return;
+    setEnvMode(newMode);
+
+    if (newMode === 'live') {
+      // Backup current demo accounts
+      setDemoAccountsBackup(connectedAccounts);
+      setDemoPostsBackup(scheduledPosts);
+
+      // Clear mock data: only keep real accounts
+      onChangeProject({
+        connectedAccounts: liveAccounts,
+        scheduledPosts: scheduledPosts.filter((p) => !p.id.startsWith('post-1') && !p.id.startsWith('post-2') && !p.id.startsWith('post-3')),
+      });
+      setSelectedAccountIds(liveAccounts.map((a) => a.id));
+      setEnvSwitchNotice('🚀 Beralih ke Mode Live: Data simulasi demo telah dibersihkan. Silakan konfigurasi API Key dan hubungkan akun nyata Anda via OAuth di bawah ini.');
+    } else {
+      // Restore sandbox demo accounts & posts
+      const restoredAccounts = demoAccountsBackup.length > 0 ? demoAccountsBackup : (DEFAULT_PIPPIT_PROJECT.connectedAccounts || []);
+      const restoredPosts = demoPostsBackup.length > 0 ? demoPostsBackup : (DEFAULT_PIPPIT_PROJECT.scheduledPosts || []);
+      onChangeProject({
+        connectedAccounts: restoredAccounts,
+        scheduledPosts: restoredPosts,
+      });
+      setSelectedAccountIds(restoredAccounts.map((a) => a.id));
+      setEnvSwitchNotice('🧪 Beralih ke Mode Demo (Sandbox): Data simulasi akun & metrik kampanye telah dimuat kembali untuk pengujian aman.');
+    }
+
+    setTimeout(() => {
+      setEnvSwitchNotice(null);
+    }, 6000);
+  };
+
+  const handleAddLiveRealAccount = (newAcc: ConnectedSocialAccount) => {
+    const updated = [...liveAccounts.filter((a) => a.id !== newAcc.id), newAcc];
+    setLiveAccounts(updated);
+    onChangeProject({ connectedAccounts: updated });
+    setSelectedAccountIds(updated.map((a) => a.id));
+  };
 
   // Modals state
   const [isMultiAccountModalOpen, setIsMultiAccountModalOpen] = useState(false);
@@ -407,15 +460,51 @@ export const DistributionTab: React.FC<DistributionTabProps> = ({
       {/* Header Info */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-6">
         <div>
-          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-700 text-xs font-semibold uppercase tracking-wider mb-2 border border-indigo-200">
-            <Share2 className="w-3.5 h-3.5" />
-            Layer 4: Output & Multi-Channel Distribution
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-700 text-xs font-semibold uppercase tracking-wider border border-indigo-200">
+              <Share2 className="w-3.5 h-3.5" />
+              Layer 4: Output & Multi-Channel Distribution
+            </div>
+
+            {/* DEMO vs LIVE ENVIRONMENT TOGGLE PILL */}
+            <div className="flex items-center p-1 bg-slate-200/80 rounded-xl border border-slate-300 gap-1">
+              <button
+                id="btn-env-mode-demo"
+                onClick={() => handleSwitchEnvMode('demo')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                  envMode === 'demo'
+                    ? 'bg-white text-indigo-700 shadow-xs ring-1 ring-slate-300'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Mode Demo Sandbox: Data simulasi aman untuk pengujian fitur"
+              >
+                <span>🧪</span>
+                <span>Mode Demo</span>
+              </button>
+              <button
+                id="btn-env-mode-live"
+                onClick={() => handleSwitchEnvMode('live')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                  envMode === 'live'
+                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Mode Live: Terhubung ke akun & API resmi (Data mock dibersihkan)"
+              >
+                <span>🚀</span>
+                <span>Mode Live</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>
+              </button>
+            </div>
           </div>
+
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
             Pusat Pengaturan Multi-Akun & Distribusi Konten
           </h1>
           <p className="text-sm text-slate-500 mt-1 max-w-2xl">
-            Hubungkan akun TikTok Shop, IG Reels, dan FB Ads untuk publikasi serentak, generator caption & tagar pintar AI, proteksi auto-watermark, dan notifikasi milestone views.
+            {envMode === 'live'
+              ? 'Mode Live Aktif: Publikasi langsung ke channel media sosial resmi dengan integrasi TikTok Shop API, Meta Graph, dan YouTube Studio Data API.'
+              : 'Mode Demo Sandbox: Hubungkan akun TikTok Shop, IG Reels, dan FB Ads untuk publikasi serentak, generator caption pintar AI, dan preview analitik simulasi.'}
           </p>
         </div>
 
@@ -452,6 +541,19 @@ export const DistributionTab: React.FC<DistributionTabProps> = ({
             <span>Watermark: {watermarkConfig.enabled ? 'Aktif' : 'Nonaktif'}</span>
             <Sliders className="w-3 h-3 text-slate-400" />
           </button>
+
+          {/* SYSTEM SETTINGS & API CREDENTIALS BUTTON */}
+          {onOpenSystemSettings && (
+            <button
+              id="btn-distribution-system-settings"
+              onClick={onOpenSystemSettings}
+              className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 font-bold text-xs sm:text-sm rounded-xl shadow-2xs transition active:scale-95"
+              title="Buka Pengaturan Sistem, Kredensial API & Webhook"
+            >
+              <Settings className="w-4 h-4 text-slate-600" />
+              <span>Pengaturan API</span>
+            </button>
+          )}
 
           {/* View Mode Toggle Sub-Navigation Tabs */}
           <div className="bg-slate-100 p-1 rounded-2xl flex items-center border border-slate-200 gap-1 flex-wrap">
@@ -540,6 +642,16 @@ export const DistributionTab: React.FC<DistributionTabProps> = ({
           </div>
 
           <button
+            id="btn-connect-real-account-main"
+            onClick={() => setIsMultiAccountModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md shadow-emerald-200 transition active:scale-95 animate-pulse-subtle"
+            title="Hubungkan akun TikTok, Instagram Reels, atau YouTube Shorts asli Anda via OAuth"
+          >
+            <ShieldCheck className="w-4 h-4 text-emerald-100" />
+            <span>+ Connect Real Account</span>
+          </button>
+
+          <button
             onClick={() => setIsMultiAccountModalOpen(true)}
             className="flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-semibold text-xs sm:text-sm rounded-xl shadow-xs transition"
           >
@@ -574,6 +686,25 @@ export const DistributionTab: React.FC<DistributionTabProps> = ({
         </div>
       )}
 
+      {envSwitchNotice && (
+        <div className={`p-4 rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 shadow-xs ${
+          envMode === 'live'
+            ? 'bg-emerald-50 border border-emerald-300 text-emerald-950'
+            : 'bg-indigo-50 border border-indigo-300 text-indigo-950'
+        }`}>
+          <div className="flex items-center gap-2.5">
+            <span className="text-base">{envMode === 'live' ? '🚀' : '🧪'}</span>
+            <span>{envSwitchNotice}</span>
+          </div>
+          <button
+            onClick={() => setEnvSwitchNotice(null)}
+            className="text-xs px-2.5 py-1 bg-black/10 hover:bg-black/20 rounded-lg transition"
+          >
+            Tutup
+          </button>
+        </div>
+      )}
+
       {/* RENDER VIEW ACCORDING TO ACTIVE MODE */}
       {distributionViewMode === 'scheduler' ? (
         <ContentSchedulingSection
@@ -593,6 +724,44 @@ export const DistributionTab: React.FC<DistributionTabProps> = ({
         />
       ) : (
         <>
+          {/* LIVE MODE OAUTH & API KEY CONFIGURATION SUITE */}
+          {envMode === 'live' ? (
+            <LiveModeOAuthPanel
+              connectedAccounts={connectedAccounts}
+              onAddRealAccount={handleAddLiveRealAccount}
+              onOpenMultiAccountModal={() => setIsMultiAccountModalOpen(true)}
+            />
+          ) : (
+            /* Demo Mode Quick Guide */
+            <div className="bg-indigo-50/80 border border-indigo-200/90 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-indigo-200">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-bold text-indigo-950">
+                      Mode Sandbox Demo (Data Simulasi Aman)
+                    </h3>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-200/80 text-indigo-900">
+                      Status: Sandbox Ready
+                    </span>
+                  </div>
+                  <p className="text-xs text-indigo-800 leading-relaxed max-w-3xl">
+                    Anda sedang menjalankan simulasi penerbitan video, hashtag AI, dan metrik penonton. Untuk menghubungkan akun TikTok Shop, IG Reels, atau YouTube resmi dan membersihkan data mock, klik <strong>Mode Live</strong> di bagian atas.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleSwitchEnvMode('live')}
+                className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs rounded-xl shadow-xs shrink-0 transition active:scale-95 flex items-center gap-1.5"
+              >
+                <span>Beralih ke Mode Live</span>
+                <span>🚀</span>
+              </button>
+            </div>
+          )}
+
           {/* MULTI-ACCOUNT CROSS-POSTING CONTROLLER BAR */}
           <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-5 sm:p-6 text-white space-y-4 shadow-xl border border-indigo-900/50">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">

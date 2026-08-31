@@ -245,5 +245,52 @@ export const optimizeScriptSeoApi = async (params: {
   return json.scenes;
 };
 
+export const generate3ActScriptApi = async (params: {
+  productTitle: string;
+  category?: string;
+  brandName?: string;
+  keywords: string[];
+  usps?: string[];
+  painPoints?: string[];
+  tone?: string;
+  duration?: string;
+  adGoal?: string;
+  language?: string;
+  strategyAngle?: string;
+}): Promise<import('../types').ThreeActScriptData> => {
+  const res = await fetch('/api/generate-3act-script', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    throw new Error('Gagal menghasilkan naskah video 3 babak AI');
+  }
+  const json = await res.json();
+  return json.data;
+};
+
+export const magicRefineStoryboardApi = async (params: {
+  scenes: StoryboardScene[];
+  productAnalysis?: import('../types').ProductAnalysis;
+  specificSceneId?: string;
+  focus?: 'viral_hooks' | 'cinematic_prompts' | 'all';
+}): Promise<{
+  scenes: StoryboardScene[];
+  refineSummary: string;
+  viralHooksSuggested?: string[];
+}> => {
+  const res = await fetch('/api/storyboard/magic-refine', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    throw new Error('Gagal menyempurnakan storyboard dengan AI Magic Refine');
+  }
+  const json = await res.json();
+  return json.data;
+};
+
 
 
