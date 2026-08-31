@@ -264,8 +264,8 @@ export const VideoPreviewPlayer: React.FC<VideoPreviewPlayerProps> = ({
       }`}
     >
       {/* Top Header Bar */}
-      <div className="px-4 py-3 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
+      <div className="px-4 py-3 bg-slate-950/80 border-b border-slate-800 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2.5">
           <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
           <span className="text-xs font-bold text-slate-200 tracking-wide flex items-center gap-1.5">
             <Eye className="w-3.5 h-3.5 text-indigo-400" />
@@ -285,7 +285,7 @@ export const VideoPreviewPlayer: React.FC<VideoPreviewPlayerProps> = ({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Brand Kit Quick Link */}
           {onOpenBrandSettings && (
             <button
@@ -340,12 +340,12 @@ export const VideoPreviewPlayer: React.FC<VideoPreviewPlayerProps> = ({
       </div>
 
       {/* Video Viewport Stage */}
-      <div className="flex-1 min-h-[380px] sm:min-h-[420px] max-h-[620px] bg-black/95 flex items-center justify-center p-2 sm:p-4 relative overflow-hidden select-none">
+      <div className="flex-1 min-h-[320px] sm:min-h-[420px] max-h-[620px] bg-black/95 flex items-center justify-center p-2 sm:p-4 relative overflow-hidden select-none">
         {/* Dynamic Aspect Ratio Box */}
         <div
           className={`relative bg-slate-950 rounded-xl overflow-hidden shadow-2xl border border-slate-800/80 transition-all duration-300 flex items-center justify-center max-w-full ${
             aspectRatio === '9:16'
-              ? 'w-[270px] sm:w-[290px] h-[480px] sm:h-[515px]'
+              ? 'w-[240px] sm:w-[290px] h-[426px] sm:h-[515px]'
               : aspectRatio === '1:1'
               ? 'w-full max-w-[340px] sm:max-w-[420px] aspect-square'
               : 'w-full max-w-[460px] sm:max-w-[580px] aspect-video'
@@ -630,7 +630,7 @@ export const VideoPreviewPlayer: React.FC<VideoPreviewPlayerProps> = ({
       </div>
 
       {/* Main Playback Control Bar */}
-      <div className="px-4 py-3 bg-slate-950/95 flex items-center justify-between gap-4">
+      <div className="px-4 py-3 bg-slate-950/95 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         {/* Left: Playback Controls */}
         <div className="flex items-center gap-2">
           <button
@@ -703,7 +703,7 @@ export const VideoPreviewPlayer: React.FC<VideoPreviewPlayerProps> = ({
         </div>
 
         {/* Right: Speed & Info */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-end sm:self-auto">
           {/* Speed Selector */}
           <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5">
             {[0.75, 1, 1.25, 1.5].map(speed => (

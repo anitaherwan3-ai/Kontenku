@@ -210,7 +210,7 @@ export default function App() {
 
   return (
     <RenderQueueProvider>
-      <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col selection:bg-indigo-500 selection:text-white font-sans antialiased">
+      <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col selection:bg-indigo-500 selection:text-white font-sans antialiased overflow-x-hidden">
         {/* Top Studio Navbar */}
         <Navbar
           activeTab={activeTab}
@@ -223,7 +223,7 @@ export default function App() {
         />
 
         {/* Main Content View Switcher */}
-        <main className="flex-1">
+        <main className="flex-1 pb-28 sm:pb-32">
           {activeTab === 'input' && (
             <InputLayerTab
               inputData={project.inputData}
@@ -273,13 +273,13 @@ export default function App() {
         </main>
 
         {/* Footer */}
-        <footer className="border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-500 mt-12">
-          <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-            <div className="flex items-center gap-2 font-medium">
+        <footer className="border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-500 mt-8 sm:mt-12">
+          <div className="max-w-7xl mx-auto px-4 flex flex-col items-center justify-between gap-3 sm:flex-row sm:items-center">
+            <div className="flex flex-wrap items-center justify-center gap-2 font-medium sm:justify-start">
               <span className="text-slate-900 font-bold">KontenKU</span>
               <span>• E-Commerce Video Ad & Content Studio</span>
             </div>
-            <div className="flex items-center gap-4 text-slate-500">
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-slate-500 sm:justify-end">
               <span>Link-to-Video</span>
               <span>Seedance Engine</span>
               <span>Digital Avatars</span>

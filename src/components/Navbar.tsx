@@ -46,14 +46,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 text-slate-900 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 gap-4">
+        <div className="flex flex-col gap-3 py-3 md:flex-row md:items-center md:justify-between md:gap-4 md:min-h-16">
           
           {/* Logo & Brand */}
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-3 min-w-0 shrink-0">
             <div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-md shadow-indigo-100 text-white">
               <Sparkles className="w-5 h-5 text-indigo-100" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="font-black text-lg tracking-tight text-slate-900">
                   KontenKU
@@ -62,7 +62,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   AI Studio
                 </span>
               </div>
-              <p className="text-xs text-slate-500 truncate max-w-[180px] sm:max-w-xs font-medium">
+              <p className="text-xs text-slate-500 truncate max-w-[180px] sm:max-w-xs md:max-w-[220px] font-medium">
                 {project.title}
               </p>
             </div>
@@ -118,14 +118,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           </nav>
 
           {/* Action Tools & Settings */}
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end">
             
             {/* System Settings & API Connections Button */}
             {onOpenSystemSettings && (
               <button
                 id="btn-open-system-settings"
                 onClick={onOpenSystemSettings}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-xs font-bold text-slate-700 rounded-xl shadow-2xs transition active:scale-95"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-xs font-bold text-slate-700 rounded-xl shadow-2xs transition active:scale-95"
                 title="Pengaturan Sistem, Kredensial API & Model AI"
               >
                 <Settings className="w-3.5 h-3.5 text-slate-600" />
@@ -138,7 +138,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 id="btn-brand-kit-settings"
                 onClick={onOpenBrandSettings}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200 text-xs font-bold text-indigo-700 rounded-xl shadow-2xs transition active:scale-95"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200 text-xs font-bold text-indigo-700 rounded-xl shadow-2xs transition active:scale-95"
                 title="Atur Palet Warna & Font Brand"
               >
                 <Palette className="w-3.5 h-3.5 text-indigo-600" />
@@ -146,11 +146,39 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
+            {/* Mobile Preset Selector */}
+            <div className="sm:hidden min-w-[140px] flex-1">
+              <label htmlFor="mobile-preset-selector" className="sr-only">
+                Pilih preset demo
+              </label>
+              <div className="relative">
+                <SlidersHorizontal className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-indigo-600" />
+                <select
+                  id="mobile-preset-selector"
+                  defaultValue=""
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      onLoadPreset(e.target.value);
+                      e.target.value = '';
+                    }
+                  }}
+                  className="w-full appearance-none rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs font-bold text-slate-700 shadow-2xs outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/15"
+                >
+                  <option value="">Preset Demo</option>
+                  {DEMO_PRESET_PRODUCTS.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
             {/* Quick Demo Preset Selector */}
-            <div className="relative group">
+            <div className="relative hidden sm:block group">
               <button
                 id="btn-preset-selector"
-                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 rounded-xl shadow-2xs transition"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 rounded-xl shadow-2xs transition"
                 title="Pilih Contoh Produk Demo"
               >
                 <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600" />
@@ -178,7 +206,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               id="btn-export-ad"
               onClick={onOpenExportModal}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm shadow-indigo-200 transition active:scale-95"
+              className="flex flex-1 items-center justify-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm shadow-indigo-200 transition active:scale-95 sm:flex-none"
             >
               <Download className="w-3.5 h-3.5 text-white" />
               <span>Export Video</span>
@@ -188,7 +216,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Mobile Tab Bar */}
-        <div className="md:hidden flex items-center justify-between overflow-x-auto py-2 border-t border-slate-200 gap-2 no-scrollbar">
+        <div className="md:hidden flex items-center overflow-x-auto py-2 border-t border-slate-200 gap-2 no-scrollbar">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -196,7 +224,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition ${
+                className={`flex min-w-max items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition ${
                   isActive
                     ? 'bg-indigo-600 text-white shadow-xs'
                     : 'text-slate-600 bg-slate-100 hover:bg-slate-200'
